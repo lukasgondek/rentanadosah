@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      approved_emails: {
+        Row: {
+          approved_by: string | null
+          created_at: string | null
+          email: string
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          notes?: string | null
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -368,6 +392,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_email_approved: { Args: { check_email: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"

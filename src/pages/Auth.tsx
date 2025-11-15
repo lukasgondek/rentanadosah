@@ -7,7 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp } from "lucide-react";
+import { Loader2, TrendingUp, ExternalLink } from "lucide-react";
+import { z } from "zod";
+
+const signUpSchema = z.object({
+  email: z.string().trim().email({ message: "Neplatná emailová adresa" }).max(255, { message: "Email je příliš dlouhý" }),
+  password: z.string().min(8, { message: "Heslo musí mít alespoň 8 znaků" }).max(72, { message: "Heslo je příliš dlouhé" }),
+  fullName: z.string().trim().min(1, { message: "Jméno je povinné" }).max(100, { message: "Jméno je příliš dlouhé" }),
+});
+
+const signInSchema = z.object({
+  email: z.string().trim().email({ message: "Neplatná emailová adresa" }).max(255),
+  password: z.string().min(1, { message: "Heslo je povinné" }),
+});
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -38,28 +50,87 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      // Validate inputs
+      const validation = signUpSchema.safeParse({ email, password, fullName });
+      if (!validation.success) {
+        toast({
+          variant: "destructive",
+          title: "Chyba validace",
+          description: validation.error.errors[0].message,
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Check if email is approved
+      const { data: isApproved, error: checkError } = await supabase
+        .rpc('is_email_approved', { check_email: email.trim().toLowerCase() });
+
+      if (checkError) {
+        toast({
+          variant: "destructive",
+          title: "Chyba",
+          description: "Nepodařilo se ověřit oprávnění.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (!isApproved) {
+        toast({
+          variant: "destructive",
+          title: "Přístup odepřen",
+          description: (
+            <div className="space-y-2">
+              <p>Přístup do KALKULAČKY REALITNÍHO RENTIÉRA je udělen pouze účastníkům programu AKCELERÁTOR REALITNÍHO RENTIÉRA.</p>
+              <a 
+                href="http://lukasgondek.cz/pristup" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                Máte zájem o přístup? Klikněte zde <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          ),
+        });
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
-            full_name: fullName,
+            full_name: fullName.trim(),
           },
         },
       });
 
       if (error) {
-        toast({
-          variant: "destructive",
-          title: "Chyba při registraci",
-          description: error.message,
-        });
+        if (error.message.includes("already registered")) {
+          toast({
+            variant: "destructive",
+            title: "Email již existuje",
+            description: "Tento email je již zaregistrován. Zkuste se přihlásit.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Chyba při registraci",
+            description: error.message,
+          });
+        }
       } else {
         toast({
           title: "Úspěšná registrace!",
           description: "Nyní se můžete přihlásit.",
         });
+        setEmail("");
+        setPassword("");
+        setFullName("");
       }
     } catch (error) {
       toast({
@@ -77,17 +148,37 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      // Validate inputs
+      const validation = signInSchema.safeParse({ email, password });
+      if (!validation.success) {
+        toast({
+          variant: "destructive",
+          title: "Chyba validace",
+          description: validation.error.errors[0].message,
+        });
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (error) {
-        toast({
-          variant: "destructive",
-          title: "Chyba při přihlášení",
-          description: error.message,
-        });
+        if (error.message.includes("Invalid login credentials")) {
+          toast({
+            variant: "destructive",
+            title: "Chyba při přihlášení",
+            description: "Nesprávný email nebo heslo.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Chyba při přihlášení",
+            description: error.message,
+          });
+        }
       }
     } catch (error) {
       toast({

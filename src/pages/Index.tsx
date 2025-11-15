@@ -87,6 +87,8 @@ const Index = () => {
         return <LoansTab />;
       case "properties":
         return <PropertiesTab />;
+      case "emails":
+        return null; // Handled by admin dashboard
       default:
         return <DashboardOverview />;
     }
