@@ -8,6 +8,8 @@ import IncomeExpensesTab from "@/components/income/IncomeExpensesTab";
 import InvestmentsTab from "@/components/investments/InvestmentsTab";
 import LoansTab from "@/components/loans/LoansTab";
 import PropertiesTab from "@/components/properties/PropertiesTab";
+import { AdminDashboard } from "@/components/admin/AdminDashboard";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Loader2 } from "lucide-react";
 
 const Index = () => {
@@ -15,6 +17,8 @@ const Index = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,7 +45,7 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
+  if (loading || roleLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -54,6 +58,24 @@ const Index = () => {
   }
 
   const renderContent = () => {
+    if (activeTab === "admin" && isAdmin) {
+      if (selectedClientId) {
+        return (
+          <div className="space-y-6">
+            <AdminDashboard onSelectClient={setSelectedClientId} selectedClientId={selectedClientId} />
+            <div className="border-t pt-6">
+              {renderClientContent()}
+            </div>
+          </div>
+        );
+      }
+      return <AdminDashboard onSelectClient={setSelectedClientId} selectedClientId={selectedClientId} />;
+    }
+    
+    return renderClientContent();
+  };
+
+  const renderClientContent = () => {
     switch (activeTab) {
       case "dashboard":
         return <DashboardOverview />;
@@ -71,7 +93,7 @@ const Index = () => {
   };
 
   return (
-    <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+    <Layout activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin}>
       {renderContent()}
     </Layout>
   );

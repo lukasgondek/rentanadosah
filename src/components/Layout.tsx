@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,9 +20,10 @@ interface LayoutProps {
   children: ReactNode;
   activeTab: string;
   onTabChange: (tab: string) => void;
+  isAdmin?: boolean;
 }
 
-const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
+const Layout = ({ children, activeTab, onTabChange, isAdmin = false }: LayoutProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -35,7 +37,12 @@ const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
     navigate("/auth");
   };
 
+  const adminTabs = isAdmin ? [
+    { id: "admin", label: "Admin Dashboard", icon: Shield },
+  ] : [];
+
   const tabs = [
+    ...adminTabs,
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "income-expenses", label: "Příjmy & Výdaje", icon: Wallet },
     { id: "investments", label: "Investice", icon: TrendingUp },
