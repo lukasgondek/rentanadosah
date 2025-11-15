@@ -59,7 +59,7 @@ const Layout = ({ children, activeTab, onTabChange, isAdmin = false }: LayoutPro
             <div className="p-2 bg-primary/10 rounded-lg">
               <TrendingUp className="w-6 h-6 text-primary" />
             </div>
-            <h1 className="text-xl font-bold">Finanční plánování</h1>
+            <h1 className="text-xl font-bold">Kalkulačka REALITNÍHO RENTIÉRA®</h1>
           </div>
           <div className="flex items-center gap-4">
             <Button
