@@ -36,7 +36,7 @@ interface IncomeFormData {
 }
 
 const incomeValidationSchema = z.object({
-  name: z.string().trim().min(1, "Název je povinný").max(200, "Název je příliš dlouhý"),
+  name: z.string().trim().max(200, "Název je příliš dlouhý").optional(),
   grossSalary: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
   netSalary: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
   incomeAmount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
@@ -190,7 +190,6 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Např. Hlavní zaměstnání"
-              required
             />
           </div>
 
