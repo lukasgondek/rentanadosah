@@ -1,0 +1,203 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
+import { Checkbox } from "@/components/ui/checkbox";
+
+const investmentValidationSchema = z.object({
+  name: z.string().trim().max(200, "Název je příliš dlouhý").optional(),
+  amount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká"),
+  yearly_return_percent: z.number().min(-100, "Procento nemůže být nižší než -100").max(1000, "Procento je příliš vysoké").optional(),
+  liquidity_months: z.number().min(0, "Doba likvidace nemůže být záporná").max(1200, "Doba likvidace je příliš dlouhá").optional(),
+});
+
+export const InvestmentDialog = ({ onSuccess }: { onSuccess: () => void }) => {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "cash",
+    amount: "",
+    yearly_return_percent: "",
+    liquidity_months: "",
+    is_forecast: false,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const validationData = {
+        name: formData.name || undefined,
+        amount: parseFloat(formData.amount),
+        yearly_return_percent: formData.yearly_return_percent ? parseFloat(formData.yearly_return_percent) : undefined,
+        liquidity_months: formData.liquidity_months ? parseInt(formData.liquidity_months) : undefined,
+      };
+
+      investmentValidationSchema.parse(validationData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Chyba validace",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({
+        title: "Chyba",
+        description: "Musíte být přihlášeni",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase.from("investments").insert({
+      user_id: user.id,
+      name: formData.name || null,
+      type: formData.type,
+      amount: parseFloat(formData.amount),
+      yearly_return_percent: formData.yearly_return_percent ? parseFloat(formData.yearly_return_percent) : null,
+      liquidity_months: formData.liquidity_months ? parseInt(formData.liquidity_months) : null,
+      is_forecast: formData.is_forecast,
+    });
+
+    if (error) {
+      toast({
+        title: "Chyba",
+        description: "Nepodařilo se přidat investici",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Úspěch",
+      description: "Investice byla přidána",
+    });
+
+    setFormData({
+      name: "",
+      type: "cash",
+      amount: "",
+      yearly_return_percent: "",
+      liquidity_months: "",
+      is_forecast: false,
+    });
+    setOpen(false);
+    onSuccess();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          Přidat investici
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Přidat investici</DialogTitle>
+          <DialogDescription>
+            Vyplňte informace o vaší investici
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Typ investice</Label>
+              <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Hotovost</SelectItem>
+                  <SelectItem value="stocks">Akcie</SelectItem>
+                  <SelectItem value="bonds">Dluhopisy</SelectItem>
+                  <SelectItem value="crypto">Kryptoměny</SelectItem>
+                  <SelectItem value="etf">ETF</SelectItem>
+                  <SelectItem value="mutual_fund">Podílový fond</SelectItem>
+                  <SelectItem value="other">Jiné</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Název</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Např. Spořicí účet"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Hodnota investice (Kč)</Label>
+            <Input
+              type="number"
+              value={formData.amount}
+              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+              placeholder="100000"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Roční zhodnocení (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={formData.yearly_return_percent}
+                onChange={(e) => setFormData({ ...formData, yearly_return_percent: e.target.value })}
+                placeholder="5.0"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Doba likvidace (měsíce)</Label>
+              <Input
+                type="number"
+                value={formData.liquidity_months}
+                onChange={(e) => setFormData({ ...formData, liquidity_months: e.target.value })}
+                placeholder="3"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="is_forecast"
+              checked={formData.is_forecast}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_forecast: checked as boolean })}
+            />
+            <Label htmlFor="is_forecast" className="text-sm font-normal cursor-pointer">
+              Jedná se o plánovanou investici
+            </Label>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Zrušit
+            </Button>
+            <Button type="submit">
+              Přidat investici
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
