@@ -60,33 +60,75 @@ export type Database = {
       }
       income_sources: {
         Row: {
+          business_expenses: number | null
+          business_income: number | null
+          business_tax_base: number | null
+          category: string | null
           created_at: string | null
+          expense_percentage: number | null
+          expense_type: string | null
+          gross_salary: number | null
           id: string
+          income_amount: number | null
           is_forecast: boolean | null
           monthly_amount: number | null
           name: string
+          net_salary: number | null
+          other_amount: number | null
+          other_frequency: string | null
+          owner_type: string | null
+          real_expenses: number | null
+          tax_base: number | null
           type: string
           updated_at: string | null
           user_id: string
           yearly_amount: number | null
         }
         Insert: {
+          business_expenses?: number | null
+          business_income?: number | null
+          business_tax_base?: number | null
+          category?: string | null
           created_at?: string | null
+          expense_percentage?: number | null
+          expense_type?: string | null
+          gross_salary?: number | null
           id?: string
+          income_amount?: number | null
           is_forecast?: boolean | null
           monthly_amount?: number | null
           name: string
+          net_salary?: number | null
+          other_amount?: number | null
+          other_frequency?: string | null
+          owner_type?: string | null
+          real_expenses?: number | null
+          tax_base?: number | null
           type: string
           updated_at?: string | null
           user_id: string
           yearly_amount?: number | null
         }
         Update: {
+          business_expenses?: number | null
+          business_income?: number | null
+          business_tax_base?: number | null
+          category?: string | null
           created_at?: string | null
+          expense_percentage?: number | null
+          expense_type?: string | null
+          gross_salary?: number | null
           id?: string
+          income_amount?: number | null
           is_forecast?: boolean | null
           monthly_amount?: number | null
           name?: string
+          net_salary?: number | null
+          other_amount?: number | null
+          other_frequency?: string | null
+          owner_type?: string | null
+          real_expenses?: number | null
+          tax_base?: number | null
           type?: string
           updated_at?: string | null
           user_id?: string
