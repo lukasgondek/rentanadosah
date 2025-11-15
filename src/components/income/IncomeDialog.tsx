@@ -41,6 +41,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     category: "employment",
     ownerType: "self",
     name: "",
+    expenseType: "flat_rate",
     otherFrequency: "monthly",
   });
 
@@ -105,6 +106,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       category: "employment",
       ownerType: "self",
       name: "",
+      expenseType: "flat_rate",
       otherFrequency: "monthly",
     });
     onSuccess();
