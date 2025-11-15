@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
 
 type IncomeCategory = "employment" | "self_employed_s7" | "rental_s9" | "business" | "other";
 type OwnerType = "self" | "partner";
@@ -33,6 +34,18 @@ interface IncomeFormData {
   otherAmount?: number;
   otherFrequency?: OtherFrequency;
 }
+
+const incomeValidationSchema = z.object({
+  name: z.string().trim().min(1, "Název je povinný").max(200, "Název je příliš dlouhý"),
+  grossSalary: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
+  netSalary: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
+  incomeAmount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
+  expensePercentage: z.number().min(0, "Procento nemůže být záporné").max(100, "Procento nemůže být vyšší než 100").optional(),
+  realExpenses: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
+  businessIncome: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
+  businessExpenses: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
+  otherAmount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
+});
 
 export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
   const [open, setOpen] = useState(false);
@@ -61,6 +74,20 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate form data
+    try {
+      incomeValidationSchema.parse(formData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({ 
+          title: "Chyba validace", 
+          description: error.errors[0].message, 
+          variant: "destructive" 
+        });
+        return;
+      }
+    }
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast({ title: "Chyba", description: "Musíte být přihlášeni", variant: "destructive" });
@@ -73,7 +100,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       user_id: user.id,
       category: formData.category,
       owner_type: formData.ownerType,
-      name: formData.name,
+      name: formData.name.trim(),
       type: formData.category,
       gross_salary: formData.grossSalary,
       net_salary: formData.netSalary,
