@@ -26,6 +26,9 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -187,11 +190,46 @@ const Auth = () => {
         description: "Něco se pokazilo. Zkuste to prosím znovu.",
       });
     } finally {
-      setLoading(false);
-    }
-  };
+    setLoading(false);
+  }
+};
 
-  return (
+const handleForgotPassword = async () => {
+  if (!resetEmail) {
+    toast({
+      title: "Chyba",
+      description: "Zadejte prosím váš email",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  try {
+    setIsResetting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: `${window.location.origin}/auth?reset=true`,
+    });
+
+    if (error) throw error;
+
+    toast({
+      title: "Email odeslán",
+      description: "Zkontrolujte svou emailovou schránku pro odkaz na reset hesla",
+    });
+    setShowForgotPassword(false);
+    setResetEmail("");
+  } catch (error: any) {
+    toast({
+      title: "Chyba",
+      description: error.message || "Nepodařilo se odeslat email pro reset hesla",
+      variant: "destructive",
+    });
+  } finally {
+    setIsResetting(false);
+  }
+};
+
+return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-2 text-center">
@@ -200,9 +238,9 @@ const Auth = () => {
               <TrendingUp className="w-8 h-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl">Finanční kalkulačka</CardTitle>
+          <CardTitle className="text-2xl">Kalkulačka REALITNÍHO RENTIÉRA®</CardTitle>
           <CardDescription>
-            Spravujte své finance a plánujte investice
+            Profesionální nástroj pro správu financí a strategické budování ziskového realitního portfolia.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -238,6 +276,14 @@ const Auth = () => {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Přihlásit se
+                </Button>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full text-sm text-muted-foreground"
+                  onClick={() => setShowForgotPassword(true)}
+                >
+                  Zapomněli jste heslo?
                 </Button>
               </form>
             </TabsContent>
@@ -286,6 +332,51 @@ const Auth = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Forgot Password Dialog */}
+      {showForgotPassword && (
+        <Card className="w-full max-w-md mt-4 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-xl">Reset hesla</CardTitle>
+            <CardDescription>
+              Zadejte váš email a my vám pošleme odkaz pro obnovení hesla.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Email</Label>
+              <Input
+                id="reset-email"
+                type="email"
+                placeholder="vas@email.cz"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                disabled={isResetting}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleForgotPassword}
+                disabled={isResetting}
+                className="flex-1"
+              >
+                {isResetting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isResetting ? "Odesílání..." : "Odeslat odkaz"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setResetEmail("");
+                }}
+                disabled={isResetting}
+              >
+                Zrušit
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
