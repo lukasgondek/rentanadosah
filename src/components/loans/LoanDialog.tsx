@@ -19,20 +19,25 @@ const loanValidationSchema = z.object({
   ltv_percent: z.number().min(0, "LTV nemůže být záporné").max(100, "LTV nemůže být vyšší než 100").optional(),
 });
 
-export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
+interface LoanDialogProps {
+  onSuccess: () => void;
+  editData?: any;
+}
+
+export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const [formData, setFormData] = useState({
-    name: "",
-    original_amount: "",
-    remaining_principal: "",
-    interest_rate: "",
-    term_months: "",
-    monthly_payment: "",
-    ltv_percent: "",
-    collateral_location: "",
-    bank_name: "",
-    is_forecast: false,
+    name: editData?.name || "",
+    original_amount: editData?.original_amount?.toString() || "",
+    remaining_principal: editData?.remaining_principal?.toString() || "",
+    interest_rate: editData?.interest_rate?.toString() || "",
+    term_months: editData ? Math.round(editData.term_months / 12).toString() : "",
+    monthly_payment: editData?.monthly_payment?.toString() || "",
+    ltv_percent: editData?.ltv_percent?.toString() || "",
+    collateral_location: editData?.collateral_location || "",
+    bank_name: editData?.bank_name || "",
+    is_forecast: editData?.is_forecast || false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,7 +76,7 @@ export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       return;
     }
 
-    const { error } = await supabase.from("loans").insert({
+    const dataToSave = {
       user_id: user.id,
       name: formData.name?.trim() || "Úvěr",
       original_amount: parseFloat(formData.original_amount),
@@ -83,12 +88,19 @@ export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       collateral_location: formData.collateral_location || null,
       bank_name: formData.bank_name || null,
       is_forecast: formData.is_forecast,
-    });
+    };
+
+    let error;
+    if (editData) {
+      ({ error } = await supabase.from("loans").update(dataToSave).eq("id", editData.id));
+    } else {
+      ({ error } = await supabase.from("loans").insert(dataToSave));
+    }
 
     if (error) {
       toast({
         title: "Chyba",
-        description: "Nepodařilo se přidat úvěr",
+        description: editData ? "Nepodařilo se upravit úvěr" : "Nepodařilo se přidat úvěr",
         variant: "destructive",
       });
       return;
@@ -96,7 +108,7 @@ export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
     toast({
       title: "Úspěch",
-      description: "Úvěr byl přidán",
+      description: editData ? "Úvěr byl upraven" : "Úvěr byl přidán",
     });
 
     setFormData({
@@ -117,15 +129,17 @@ export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="mr-2 h-4 w-4" />
-          Přidat úvěr
-        </Button>
-      </DialogTrigger>
+      {!editData && (
+        <DialogTrigger asChild>
+          <Button size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Přidat úvěr
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Přidat úvěr</DialogTitle>
+          <DialogTitle>{editData ? "Upravit úvěr" : "Přidat úvěr"}</DialogTitle>
           <DialogDescription>
             Vyplňte informace o vašem úvěru
           </DialogDescription>

@@ -17,16 +17,21 @@ const investmentValidationSchema = z.object({
   liquidity_months: z.number().min(0, "Doba likvidace nemůže být záporná").max(1200, "Doba likvidace je příliš dlouhá").optional(),
 });
 
-export const InvestmentDialog = ({ onSuccess }: { onSuccess: () => void }) => {
+interface InvestmentDialogProps {
+  onSuccess: () => void;
+  editData?: any;
+}
+
+export const InvestmentDialog = ({ onSuccess, editData }: InvestmentDialogProps) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const [formData, setFormData] = useState({
-    name: "",
-    type: "cash",
-    amount: "",
-    yearly_return_percent: "",
-    liquidity_months: "",
-    is_forecast: false,
+    name: editData?.name || "",
+    type: editData?.type || "cash",
+    amount: editData?.amount?.toString() || "",
+    yearly_return_percent: editData?.yearly_return_percent?.toString() || "",
+    liquidity_months: editData?.liquidity_months?.toString() || "",
+    is_forecast: editData?.is_forecast || false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,7 +67,7 @@ export const InvestmentDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       return;
     }
 
-    const { error } = await supabase.from("investments").insert({
+    const dataToSave = {
       user_id: user.id,
       name: formData.name?.trim() || "Bez názvu",
       type: formData.type,
@@ -70,12 +75,19 @@ export const InvestmentDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       yearly_return_percent: formData.yearly_return_percent ? parseFloat(formData.yearly_return_percent) : null,
       liquidity_months: formData.liquidity_months ? parseInt(formData.liquidity_months) : null,
       is_forecast: formData.is_forecast,
-    });
+    };
+
+    let error;
+    if (editData) {
+      ({ error } = await supabase.from("investments").update(dataToSave).eq("id", editData.id));
+    } else {
+      ({ error } = await supabase.from("investments").insert(dataToSave));
+    }
 
     if (error) {
       toast({
         title: "Chyba",
-        description: "Nepodařilo se přidat investici",
+        description: editData ? "Nepodařilo se upravit investici" : "Nepodařilo se přidat investici",
         variant: "destructive",
       });
       return;
@@ -83,7 +95,7 @@ export const InvestmentDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
     toast({
       title: "Úspěch",
-      description: "Investice byla přidána",
+      description: editData ? "Investice byla upravena" : "Investice byla přidána",
     });
 
     setFormData({
@@ -100,15 +112,17 @@ export const InvestmentDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="mr-2 h-4 w-4" />
-          Přidat investici
-        </Button>
-      </DialogTrigger>
+      {!editData && (
+        <DialogTrigger asChild>
+          <Button size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Přidat investici
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Přidat investici</DialogTitle>
+          <DialogTitle>{editData ? "Upravit investici" : "Přidat investici"}</DialogTitle>
           <DialogDescription>
             Vyplňte informace o vaší investici
           </DialogDescription>
