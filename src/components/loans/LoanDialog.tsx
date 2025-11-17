@@ -37,7 +37,6 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
     ltv_percent: editData?.ltv_percent?.toString() || "",
     collateral_location: editData?.collateral_location || "",
     bank_name: editData?.bank_name || "",
-    is_forecast: editData?.is_forecast || false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,7 +86,7 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
       ltv_percent: formData.ltv_percent ? parseFloat(formData.ltv_percent) : null,
       collateral_location: formData.collateral_location || null,
       bank_name: formData.bank_name || null,
-      is_forecast: formData.is_forecast,
+      is_forecast: false,
     };
 
     let error;
@@ -121,7 +120,6 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
       ltv_percent: "",
       collateral_location: "",
       bank_name: "",
-      is_forecast: false,
     });
     setOpen(false);
     onSuccess();
@@ -245,17 +243,6 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
                 placeholder="Praha 2, Vinohrady"
               />
             </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="is_forecast"
-              checked={formData.is_forecast}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_forecast: checked as boolean })}
-            />
-            <Label htmlFor="is_forecast" className="text-sm font-normal cursor-pointer">
-              Jedná se o plánovaný úvěr
-            </Label>
           </div>
 
           <div className="flex justify-end gap-2">

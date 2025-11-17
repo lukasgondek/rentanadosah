@@ -274,6 +274,60 @@ export type Database = {
           },
         ]
       }
+      planned_investments: {
+        Row: {
+          appreciation_percent: number
+          created_at: string
+          estimated_value: number
+          id: string
+          interest_rate: number
+          loan_amount: number
+          ltv_percent: number
+          monthly_expenses: number
+          monthly_rent: number
+          property_identifier: string
+          purchase_price: number
+          rent_growth_percent: number
+          term_months: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          appreciation_percent?: number
+          created_at?: string
+          estimated_value: number
+          id?: string
+          interest_rate: number
+          loan_amount: number
+          ltv_percent: number
+          monthly_expenses: number
+          monthly_rent: number
+          property_identifier: string
+          purchase_price: number
+          rent_growth_percent?: number
+          term_months: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          appreciation_percent?: number
+          created_at?: string
+          estimated_value?: number
+          id?: string
+          interest_rate?: number
+          loan_amount?: number
+          ltv_percent?: number
+          monthly_expenses?: number
+          monthly_rent?: number
+          property_identifier?: string
+          purchase_price?: number
+          rent_growth_percent?: number
+          term_months?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
