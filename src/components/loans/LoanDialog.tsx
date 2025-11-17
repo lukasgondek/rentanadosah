@@ -73,7 +73,7 @@ export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
     const { error } = await supabase.from("loans").insert({
       user_id: user.id,
-      name: formData.name || null,
+      name: formData.name?.trim() || "Úvěr",
       original_amount: parseFloat(formData.original_amount),
       remaining_principal: parseFloat(formData.remaining_principal),
       interest_rate: parseFloat(formData.interest_rate),

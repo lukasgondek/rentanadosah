@@ -71,6 +71,21 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     return null;
   };
 
+  const mapCategoryToType = (category: IncomeCategory) => {
+    switch (category) {
+      case "employment":
+        return "salary";
+      case "self_employed_s7":
+        return "self_employed";
+      case "rental_s9":
+        return "rental";
+      case "business":
+        return "business";
+      default:
+        return "other";
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -100,8 +115,8 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       user_id: user.id,
       category: formData.category,
       owner_type: formData.ownerType,
-      name: formData.name.trim(),
-      type: formData.category,
+      name: (formData.name?.trim() || "Bez názvu"),
+      type: mapCategoryToType(formData.category),
       gross_salary: formData.grossSalary,
       net_salary: formData.netSalary,
       income_amount: formData.incomeAmount,
@@ -185,7 +200,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
           </div>
 
           <div className="space-y-2">
-            <Label>Název</Label>
+            <Label>Název (nepovinné)</Label>
             <Input
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}

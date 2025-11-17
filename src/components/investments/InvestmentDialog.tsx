@@ -64,7 +64,7 @@ export const InvestmentDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
     const { error } = await supabase.from("investments").insert({
       user_id: user.id,
-      name: formData.name || null,
+      name: formData.name?.trim() || "Bez názvu",
       type: formData.type,
       amount: parseFloat(formData.amount),
       yearly_return_percent: formData.yearly_return_percent ? parseFloat(formData.yearly_return_percent) : null,
