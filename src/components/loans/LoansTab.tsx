@@ -71,7 +71,7 @@ const LoansTab = () => {
                   <div>
                     <div className="font-medium">{loan.name || `Úvěr ${loan.bank_name || ''}`}</div>
                     <div className="text-sm text-muted-foreground">
-                      {loan.interest_rate}% · {loan.term_months} měsíců
+                      {loan.interest_rate}% · {Math.round(loan.term_months / 12)} let
                       {loan.is_forecast && <span className="ml-2 text-xs">(plán)</span>}
                     </div>
                   </div>

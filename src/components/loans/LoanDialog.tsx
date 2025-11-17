@@ -14,7 +14,7 @@ const loanValidationSchema = z.object({
   original_amount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká"),
   remaining_principal: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká"),
   interest_rate: z.number().min(0, "Úroková sazba nemůže být záporná").max(100, "Úroková sazba je příliš vysoká"),
-  term_months: z.number().min(1, "Doba splácení musí být alespoň 1 měsíc").max(600, "Doba splácení je příliš dlouhá"),
+  term_months: z.number().min(1, "Doba splácení musí být alespoň 1 rok").max(50, "Doba splácení je příliš dlouhá"),
   monthly_payment: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká"),
   ltv_percent: z.number().min(0, "LTV nemůže být záporné").max(100, "LTV nemůže být vyšší než 100").optional(),
 });
@@ -77,7 +77,7 @@ export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       original_amount: parseFloat(formData.original_amount),
       remaining_principal: parseFloat(formData.remaining_principal),
       interest_rate: parseFloat(formData.interest_rate),
-      term_months: parseInt(formData.term_months),
+      term_months: parseInt(formData.term_months) * 12, // Convert years to months
       monthly_payment: parseFloat(formData.monthly_payment),
       ltv_percent: formData.ltv_percent ? parseFloat(formData.ltv_percent) : null,
       collateral_location: formData.collateral_location || null,
@@ -178,12 +178,12 @@ export const LoanDialog = ({ onSuccess }: { onSuccess: () => void }) => {
             </div>
 
             <div className="space-y-2">
-              <Label>Doba splácení (měsíce)</Label>
+              <Label>Doba splácení (roky)</Label>
               <Input
                 type="number"
                 value={formData.term_months}
                 onChange={(e) => setFormData({ ...formData, term_months: e.target.value })}
-                placeholder="240"
+                placeholder="25"
                 required
               />
             </div>
