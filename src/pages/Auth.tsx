@@ -283,7 +283,7 @@ return (
                   className="w-full text-sm text-muted-foreground"
                   onClick={() => setShowForgotPassword(true)}
                 >
-                  Zapomněli jste heslo?
+                  Zapomenuté heslo
                 </Button>
               </form>
             </TabsContent>
@@ -337,7 +337,7 @@ return (
       {showForgotPassword && (
         <Card className="w-full max-w-md mt-4 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl">Reset hesla</CardTitle>
+            <CardTitle className="text-xl">Zapomenuté heslo</CardTitle>
             <CardDescription>
               Zadejte váš email a my vám pošleme odkaz pro obnovení hesla.
             </CardDescription>
