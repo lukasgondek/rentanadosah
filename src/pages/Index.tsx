@@ -8,6 +8,7 @@ import IncomeExpensesTab from "@/components/income/IncomeExpensesTab";
 import InvestmentsTab from "@/components/investments/InvestmentsTab";
 import LoansTab from "@/components/loans/LoansTab";
 import PropertiesTab from "@/components/properties/PropertiesTab";
+import PlanningTab from "@/components/planning/PlanningTab";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Loader2 } from "lucide-react";
@@ -87,6 +88,8 @@ const Index = () => {
         return <LoansTab />;
       case "properties":
         return <PropertiesTab />;
+      case "planning":
+        return <PlanningTab />;
       case "emails":
         return null; // Handled by admin dashboard
       default:

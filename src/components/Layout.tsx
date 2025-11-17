@@ -48,6 +48,7 @@ const Layout = ({ children, activeTab, onTabChange, isAdmin = false }: LayoutPro
     { id: "investments", label: "Investice", icon: TrendingUp },
     { id: "loans", label: "Úvěry", icon: CreditCard },
     { id: "properties", label: "Nemovitosti", icon: Home },
+    { id: "planning", label: "Plánování", icon: TrendingUp },
   ];
 
   return (
