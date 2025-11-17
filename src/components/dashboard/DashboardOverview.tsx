@@ -1,6 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Wallet, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface MetricCardProps {
   title: string;
@@ -40,6 +43,67 @@ const MetricCard = ({ title, value, change, description, icon: Icon, trend }: Me
 };
 
 const DashboardOverview = () => {
+  const [incomeSummary, setIncomeSummary] = useState({
+    employment: 0,
+    selfEmployed: 0,
+    rental: 0,
+    business: 0,
+    total: 0,
+  });
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchIncomeData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("income_sources")
+        .select("*")
+        .eq("user_id", user.id);
+
+      if (error) {
+        toast({
+          title: "Chyba",
+          description: "Nepodařilo se načíst příjmy",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!data) return;
+
+      // Calculate sums by category
+      const employment = data
+        .filter(item => item.type === "salary")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+      
+      const selfEmployed = data
+        .filter(item => item.type === "self_employed")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+      
+      const rental = data
+        .filter(item => item.type === "rental")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+      
+      const business = data
+        .filter(item => item.type === "business")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+
+      const total = employment + selfEmployed + rental + business;
+
+      setIncomeSummary({
+        employment,
+        selfEmployed,
+        rental,
+        business,
+        total,
+      });
+    };
+
+    fetchIncomeData();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -92,19 +156,23 @@ const DashboardOverview = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm">Zaměstnanecký</span>
-                <span className="font-medium">0 Kč</span>
+                <span className="font-medium">{incomeSummary.employment.toLocaleString()} Kč</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm">OSVČ</span>
-                <span className="font-medium">0 Kč</span>
+                <span className="font-medium">{incomeSummary.selfEmployed.toLocaleString()} Kč</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Realitní</span>
+                <span className="font-medium">{incomeSummary.rental.toLocaleString()} Kč</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm">Firemní</span>
-                <span className="font-medium">0 Kč</span>
+                <span className="font-medium">{incomeSummary.business.toLocaleString()} Kč</span>
               </div>
               <div className="flex items-center justify-between border-t pt-3">
                 <span className="font-medium">Celkem měsíčně</span>
-                <span className="font-bold">0 Kč</span>
+                <span className="font-bold">{incomeSummary.total.toLocaleString()} Kč</span>
               </div>
             </div>
           </CardContent>
