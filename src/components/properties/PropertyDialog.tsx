@@ -18,17 +18,22 @@ const propertyValidationSchema = z.object({
   yearly_appreciation_percent: z.number().min(-100, "Procento nemůže být nižší než -100").max(1000, "Procento je příliš vysoké").optional(),
 });
 
-export const PropertyDialog = ({ onSuccess }: { onSuccess: () => void }) => {
+interface PropertyDialogProps {
+  onSuccess: () => void;
+  editData?: any;
+}
+
+export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const [formData, setFormData] = useState({
-    identifier: "",
-    purchase_price: "",
-    estimated_value: "",
-    monthly_rent: "",
-    monthly_expenses: "",
-    yearly_appreciation_percent: "",
-    is_forecast: false,
+    identifier: editData?.identifier || "",
+    purchase_price: editData?.purchase_price?.toString() || "",
+    estimated_value: editData?.estimated_value?.toString() || "",
+    monthly_rent: editData?.monthly_rent?.toString() || "",
+    monthly_expenses: editData?.monthly_expenses?.toString() || "",
+    yearly_appreciation_percent: editData?.yearly_appreciation_percent?.toString() || "",
+    is_forecast: editData?.is_forecast || false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,7 +71,7 @@ export const PropertyDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       return;
     }
 
-    const { error } = await supabase.from("properties").insert({
+    const dataToSave = {
       user_id: user.id,
       identifier: formData.identifier,
       purchase_price: parseFloat(formData.purchase_price),
@@ -75,12 +80,19 @@ export const PropertyDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       monthly_expenses: formData.monthly_expenses ? parseFloat(formData.monthly_expenses) : null,
       yearly_appreciation_percent: formData.yearly_appreciation_percent ? parseFloat(formData.yearly_appreciation_percent) : null,
       is_forecast: formData.is_forecast,
-    });
+    };
+
+    let error;
+    if (editData) {
+      ({ error } = await supabase.from("properties").update(dataToSave).eq("id", editData.id));
+    } else {
+      ({ error } = await supabase.from("properties").insert(dataToSave));
+    }
 
     if (error) {
       toast({
         title: "Chyba",
-        description: "Nepodařilo se přidat nemovitost",
+        description: editData ? "Nepodařilo se upravit nemovitost" : "Nepodařilo se přidat nemovitost",
         variant: "destructive",
       });
       return;
@@ -88,7 +100,7 @@ export const PropertyDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
     toast({
       title: "Úspěch",
-      description: "Nemovitost byla přidána",
+      description: editData ? "Nemovitost byla upravena" : "Nemovitost byla přidána",
     });
 
     setFormData({
@@ -106,15 +118,17 @@ export const PropertyDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="mr-2 h-4 w-4" />
-          Přidat nemovitost
-        </Button>
-      </DialogTrigger>
+      {!editData && (
+        <DialogTrigger asChild>
+          <Button size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Přidat nemovitost
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Přidat nemovitost</DialogTitle>
+          <DialogTitle>{editData ? "Upravit nemovitost" : "Přidat nemovitost"}</DialogTitle>
           <DialogDescription>
             Vyplňte informace o vaší nemovitosti
           </DialogDescription>
