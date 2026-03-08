@@ -4,13 +4,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { IncomeDialog } from "./IncomeDialog";
 import { IncomeTable } from "./IncomeTable";
+import { ExpenseDialog } from "@/components/expenses/ExpenseDialog";
+import { ExpenseTable } from "@/components/expenses/ExpenseTable";
+
+interface Expense {
+  id: string;
+  name: string;
+  amount: number;
+  frequency: string | null;
+  is_recurring: boolean | null;
+}
 
 const IncomeExpensesTab = () => {
   const [incomeSources, setIncomeSources] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchIncomeSources = async () => {
-    setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -23,11 +33,31 @@ const IncomeExpensesTab = () => {
     if (!error && data) {
       setIncomeSources(data);
     }
+  };
+
+  const fetchExpenses = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setExpenses(data as Expense[]);
+    }
+  };
+
+  const fetchAll = async () => {
+    setLoading(true);
+    await Promise.all([fetchIncomeSources(), fetchExpenses()]);
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchIncomeSources();
+    fetchAll();
   }, []);
 
   const selfIncome = incomeSources.filter(i => i.owner_type === "self");
@@ -41,6 +71,14 @@ const IncomeExpensesTab = () => {
     return sources.reduce((sum, income) => sum + (income.yearly_amount || (income.monthly_amount || 0) * 12), 0);
   };
 
+  const totalMonthlyExpenses = expenses.reduce((sum, e) => {
+    const monthly = e.frequency === "yearly" ? e.amount / 12 : e.amount;
+    return sum + monthly;
+  }, 0);
+
+  const totalMonthlyIncome = calculateTotalMonthly(incomeSources);
+  const monthlyCashflow = totalMonthlyIncome - totalMonthlyExpenses;
+
   return (
     <div className="space-y-6">
       <div>
@@ -50,12 +88,47 @@ const IncomeExpensesTab = () => {
         </p>
       </div>
 
+      {!loading && (incomeSources.length > 0 || expenses.length > 0) && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Příjmy celkem/měs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                {totalMonthlyIncome.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Výdaje celkem/měs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-500">
+                {totalMonthlyExpenses.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Cashflow/měs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${monthlyCashflow >= 0 ? "text-green-600" : "text-red-500"}`}>
+                {monthlyCashflow >= 0 ? "+" : ""}{monthlyCashflow.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Tabs defaultValue="income" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="income">Příjmy</TabsTrigger>
           <TabsTrigger value="expenses">Výdaje</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="income" className="space-y-6">
           <Card>
             <CardHeader>
@@ -125,18 +198,83 @@ const IncomeExpensesTab = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="expenses" className="space-y-4">
+        <TabsContent value="expenses" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Pravidelné výdaje</CardTitle>
-              <CardDescription>Měsíční pravidelné náklady</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Pravidelné výdaje</CardTitle>
+                  <CardDescription>Měsíční a roční náklady</CardDescription>
+                </div>
+                <ExpenseDialog onSuccess={fetchExpenses} />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                Zatím nemáte žádné výdaje. Funkce bude dostupná brzy.
-              </div>
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Načítání...</div>
+              ) : (
+                <ExpenseTable expenses={expenses} onDelete={fetchExpenses} />
+              )}
             </CardContent>
           </Card>
+
+          {!loading && expenses.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Shrnutí výdajů</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Měsíční výdaje celkem:</span>
+                      <span className="font-bold text-lg text-red-500">
+                        {totalMonthlyExpenses.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Roční výdaje celkem:</span>
+                      <span className="font-bold text-lg">
+                        {(totalMonthlyExpenses * 12).toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Počet výdajů:</span>
+                      <span className="font-bold">{expenses.length}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Cashflow</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Příjmy/měs:</span>
+                      <span className="font-bold text-green-600">
+                        +{totalMonthlyIncome.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Výdaje/měs:</span>
+                      <span className="font-bold text-red-500">
+                        -{totalMonthlyExpenses.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                      </span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between items-center">
+                      <span className="text-sm font-semibold">Čistý cashflow/měs:</span>
+                      <span className={`font-bold text-lg ${monthlyCashflow >= 0 ? "text-green-600" : "text-red-500"}`}>
+                        {monthlyCashflow >= 0 ? "+" : ""}{monthlyCashflow.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
