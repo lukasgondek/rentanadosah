@@ -36,7 +36,7 @@ export default function PropertiesTab({ userId: viewUserId }: { userId?: string 
 
   useEffect(() => {
     fetchProperties();
-  }, []);
+  }, [viewUserId]);
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("properties").delete().eq("id", id);

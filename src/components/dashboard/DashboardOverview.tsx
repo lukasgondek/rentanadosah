@@ -94,12 +94,14 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
       // 2. Expenses
       const { data: expenseData } = await supabase
         .from("expenses")
-        .select("amount, is_recurring")
+        .select("amount, is_recurring, frequency")
         .eq("user_id", targetUserId);
 
       const expenses = expenseData || [];
-      const regular = expenses.filter(e => e.is_recurring).reduce((s, e) => s + (e.amount || 0), 0);
-      const irregular = expenses.filter(e => !e.is_recurring).reduce((s, e) => s + (e.amount || 0), 0);
+      const toMonthly = (e: { amount: number; frequency?: string | null }) =>
+        e.frequency === "yearly" ? (e.amount || 0) / 12 : (e.amount || 0);
+      const regular = expenses.filter(e => e.is_recurring).reduce((s, e) => s + toMonthly(e), 0);
+      const irregular = expenses.filter(e => !e.is_recurring).reduce((s, e) => s + toMonthly(e), 0);
       setExpenseSummary({ regular, irregular, total: regular + irregular });
 
       // 3. Loans — monthly payments + remaining principal
@@ -142,12 +144,12 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
       setNetWorth(calculatedNetWorth);
 
       // Monthly Cashflow = income + net property income - loan payments - personal expenses
-      const cashflow = totalIncome + netPropertyIncome - totalLoanPayments - (regular + irregular / 12);
+      const cashflow = totalIncome + netPropertyIncome - totalLoanPayments - (regular + irregular);
       setMonthlyCashflow(cashflow);
     };
 
     fetchAllData();
-  }, []);
+  }, [viewUserId]);
 
   const netWorth5yr = netWorth + monthlyCashflow * 60;
   const netWorth10yr = netWorth + monthlyCashflow * 120;

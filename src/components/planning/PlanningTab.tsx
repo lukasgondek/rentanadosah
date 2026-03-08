@@ -36,7 +36,7 @@ export default function PlanningTab({ userId: viewUserId }: { userId?: string | 
 
   useEffect(() => {
     fetchInvestments();
-  }, []);
+  }, [viewUserId]);
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("planned_investments").delete().eq("id", id);

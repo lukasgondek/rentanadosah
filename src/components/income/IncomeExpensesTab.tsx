@@ -61,7 +61,7 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
 
   useEffect(() => {
     fetchAll();
-  }, []);
+  }, [viewUserId]);
 
   const selfIncome = incomeSources.filter(i => i.owner_type === "self");
   const partnerIncome = incomeSources.filter(i => i.owner_type === "partner");

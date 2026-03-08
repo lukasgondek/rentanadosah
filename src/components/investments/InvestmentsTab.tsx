@@ -46,7 +46,7 @@ export default function InvestmentsTab({ userId: viewUserId }: { userId?: string
 
   useEffect(() => {
     fetchInvestments();
-  }, []);
+  }, [viewUserId]);
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("investments").delete().eq("id", id);
