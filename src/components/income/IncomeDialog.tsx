@@ -129,12 +129,20 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       business_tax_base: formData.category === "business" ? taxBase : null,
       other_amount: formData.otherAmount,
       other_frequency: formData.otherFrequency,
-      monthly_amount: formData.category === "employment" ? formData.netSalary : 
-                     formData.category === "other" && formData.otherFrequency === "yearly" && formData.otherAmount ? 
-                     formData.otherAmount / 12 : formData.otherAmount,
-      yearly_amount: formData.category === "employment" && formData.netSalary ? formData.netSalary * 12 : 
-                    formData.category === "other" && formData.otherFrequency === "monthly" && formData.otherAmount ?
-                    formData.otherAmount * 12 : formData.otherAmount,
+      monthly_amount:
+        formData.category === "employment" ? formData.netSalary :
+        formData.category === "self_employed_s7" ? (formData.incomeAmount || 0) / 12 :
+        formData.category === "rental_s9" ? (formData.incomeAmount || 0) / 12 :
+        formData.category === "business" ? ((formData.businessIncome || 0) - (formData.businessExpenses || 0)) / 12 :
+        // "other"
+        formData.otherFrequency === "yearly" && formData.otherAmount ? formData.otherAmount / 12 : formData.otherAmount,
+      yearly_amount:
+        formData.category === "employment" ? (formData.netSalary || 0) * 12 :
+        formData.category === "self_employed_s7" ? (formData.incomeAmount || 0) :
+        formData.category === "rental_s9" ? (formData.incomeAmount || 0) :
+        formData.category === "business" ? ((formData.businessIncome || 0) - (formData.businessExpenses || 0)) :
+        // "other"
+        formData.otherFrequency === "monthly" ? (formData.otherAmount || 0) * 12 : formData.otherAmount,
     });
 
     if (error) {

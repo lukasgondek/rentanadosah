@@ -34,27 +34,11 @@ const IncomeExpensesTab = () => {
   const partnerIncome = incomeSources.filter(i => i.owner_type === "partner");
 
   const calculateTotalMonthly = (sources: any[]) => {
-    return sources.reduce((sum, income) => {
-      if (income.category === "employment") {
-        return sum + (income.net_salary || 0);
-      } else if (income.category === "other") {
-        const amount = income.other_amount || 0;
-        return sum + (income.other_frequency === "yearly" ? amount / 12 : amount);
-      }
-      return sum;
-    }, 0);
+    return sources.reduce((sum, income) => sum + (income.monthly_amount || 0), 0);
   };
 
   const calculateTotalYearly = (sources: any[]) => {
-    return sources.reduce((sum, income) => {
-      if (income.category === "employment") {
-        return sum + (income.net_salary || 0) * 12;
-      } else if (income.category === "other") {
-        const amount = income.other_amount || 0;
-        return sum + (income.other_frequency === "monthly" ? amount * 12 : amount);
-      }
-      return sum;
-    }, 0);
+    return sources.reduce((sum, income) => sum + (income.yearly_amount || (income.monthly_amount || 0) * 12), 0);
   };
 
   return (
