@@ -65,35 +65,35 @@ const Index = () => {
           <div className="space-y-6">
             <AdminDashboard onSelectClient={setSelectedClientId} selectedClientId={selectedClientId} />
             <div className="border-t pt-6">
-              {renderClientContent()}
+              {renderClientContent(selectedClientId)}
             </div>
           </div>
         );
       }
       return <AdminDashboard onSelectClient={setSelectedClientId} selectedClientId={selectedClientId} />;
     }
-    
+
     return renderClientContent();
   };
 
-  const renderClientContent = () => {
+  const renderClientContent = (viewUserId?: string | null) => {
     switch (activeTab) {
       case "dashboard":
-        return <DashboardOverview />;
+        return <DashboardOverview userId={viewUserId} />;
       case "income-expenses":
-        return <IncomeExpensesTab />;
+        return <IncomeExpensesTab userId={viewUserId} />;
       case "investments":
-        return <InvestmentsTab />;
+        return <InvestmentsTab userId={viewUserId} />;
       case "loans":
-        return <LoansTab />;
+        return <LoansTab userId={viewUserId} />;
       case "properties":
-        return <PropertiesTab />;
+        return <PropertiesTab userId={viewUserId} />;
       case "planning":
-        return <PlanningTab />;
+        return <PlanningTab userId={viewUserId} />;
       case "emails":
         return null; // Handled by admin dashboard
       default:
-        return <DashboardOverview />;
+        return <DashboardOverview userId={viewUserId} />;
     }
   };
 

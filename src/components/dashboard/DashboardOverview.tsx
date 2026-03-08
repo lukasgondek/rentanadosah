@@ -45,7 +45,7 @@ const MetricCard = ({ title, value, change, description, icon: Icon, trend }: Me
 const formatCzk = (amount: number) =>
   new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(amount);
 
-const DashboardOverview = () => {
+const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = {}) => {
   const [incomeSummary, setIncomeSummary] = useState({
     employment: 0,
     selfEmployed: 0,
@@ -68,12 +68,13 @@ const DashboardOverview = () => {
     const fetchAllData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const targetUserId = viewUserId || user.id;
 
       // 1. Income sources
       const { data: incomeData, error: incomeError } = await supabase
         .from("income_sources")
         .select("type, monthly_amount")
-        .eq("user_id", user.id);
+        .eq("user_id", targetUserId);
 
       if (incomeError) {
         toast({ title: "Chyba", description: "Nepodařilo se načíst příjmy", variant: "destructive" });
@@ -94,7 +95,7 @@ const DashboardOverview = () => {
       const { data: expenseData } = await supabase
         .from("expenses")
         .select("amount, is_recurring")
-        .eq("user_id", user.id);
+        .eq("user_id", targetUserId);
 
       const expenses = expenseData || [];
       const regular = expenses.filter(e => e.is_recurring).reduce((s, e) => s + (e.amount || 0), 0);
@@ -105,7 +106,7 @@ const DashboardOverview = () => {
       const { data: loanData } = await supabase
         .from("loans")
         .select("monthly_payment, remaining_principal")
-        .eq("user_id", user.id)
+        .eq("user_id", targetUserId)
         .not("is_forecast", "eq", true);
 
       const loans = loanData || [];
@@ -117,7 +118,7 @@ const DashboardOverview = () => {
       const { data: investmentData } = await supabase
         .from("investments")
         .select("amount, yearly_return_percent")
-        .eq("user_id", user.id)
+        .eq("user_id", targetUserId)
         .not("is_forecast", "eq", true);
 
       const investments = investmentData || [];
@@ -127,7 +128,7 @@ const DashboardOverview = () => {
       const { data: propertyData } = await supabase
         .from("properties")
         .select("estimated_value, monthly_rent, monthly_expenses")
-        .eq("user_id", user.id)
+        .eq("user_id", targetUserId)
         .not("is_forecast", "eq", true);
 
       const properties = propertyData || [];

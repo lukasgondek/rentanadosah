@@ -7,17 +7,20 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-export default function PlanningTab() {
+export default function PlanningTab({ userId: viewUserId }: { userId?: string | null } = {}) {
   const [investments, setInvestments] = useState<any[]>([]);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
+  const readOnly = !!viewUserId;
 
   const fetchInvestments = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("planned_investments")
       .select("*")
       .order("created_at", { ascending: false });
+    if (viewUserId) query = query.eq("user_id", viewUserId);
+    const { data, error } = await query;
 
     if (error) {
       toast({
@@ -92,7 +95,7 @@ export default function PlanningTab() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Plánování investic</h2>
-        <PlannedInvestmentDialog onSuccess={fetchInvestments} />
+        {!readOnly && <PlannedInvestmentDialog onSuccess={fetchInvestments} />}
       </div>
 
       <div className="rounded-md border">
@@ -136,6 +139,7 @@ export default function PlanningTab() {
                     <TableCell className="text-right">{inv.ltv_percent}%</TableCell>
                     <TableCell className="text-right">{formatNumber(calc.monthlyPayment)}</TableCell>
                     <TableCell className="text-right font-semibold text-primary">{formatNumber(calc.netAnnualProfit)}</TableCell>
+                    {!readOnly && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
@@ -154,6 +158,7 @@ export default function PlanningTab() {
                         </Button>
                       </div>
                     </TableCell>
+                    )}
                   </TableRow>
                 );
               })

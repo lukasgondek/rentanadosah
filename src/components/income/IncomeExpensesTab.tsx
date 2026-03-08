@@ -15,19 +15,21 @@ interface Expense {
   is_recurring: boolean | null;
 }
 
-const IncomeExpensesTab = () => {
+const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = {}) => {
   const [incomeSources, setIncomeSources] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const readOnly = !!viewUserId;
 
   const fetchIncomeSources = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const targetUserId = viewUserId || user.id;
 
     const { data, error } = await supabase
       .from("income_sources")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .order("created_at", { ascending: false });
 
     if (!error && data) {
@@ -38,11 +40,12 @@ const IncomeExpensesTab = () => {
   const fetchExpenses = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const targetUserId = viewUserId || user.id;
 
     const { data, error } = await supabase
       .from("expenses")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .order("created_at", { ascending: false });
 
     if (!error && data) {
@@ -137,7 +140,7 @@ const IncomeExpensesTab = () => {
                   <CardTitle>Přehled příjmů</CardTitle>
                   <CardDescription>Všechny kategorie příjmů pro vás i vašeho partnera</CardDescription>
                 </div>
-                <IncomeDialog onSuccess={fetchIncomeSources} />
+                {!readOnly && <IncomeDialog onSuccess={fetchIncomeSources} />}
               </div>
             </CardHeader>
             <CardContent>
@@ -206,7 +209,7 @@ const IncomeExpensesTab = () => {
                   <CardTitle>Pravidelné výdaje</CardTitle>
                   <CardDescription>Měsíční a roční náklady</CardDescription>
                 </div>
-                <ExpenseDialog onSuccess={fetchExpenses} />
+                {!readOnly && <ExpenseDialog onSuccess={fetchExpenses} />}
               </div>
             </CardHeader>
             <CardContent>

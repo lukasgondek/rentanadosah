@@ -127,19 +127,15 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
           </TabsContent>
         </Tabs>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Kalkulačka klienta</CardTitle>
-            <CardDescription>
-              Prohlížíte data klienta: {clients.find(c => c.id === selectedClientId)?.email}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Zde se zobrazí běžný dashboard s daty vybraného klienta. Můžete editovat forecasting tabulky.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg border">
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <User className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold">{clients.find(c => c.id === selectedClientId)?.full_name || "Klient"}</p>
+            <p className="text-sm text-muted-foreground">{clients.find(c => c.id === selectedClientId)?.email} — zobrazení read-only</p>
+          </div>
+        </div>
       )}
     </div>
   );
