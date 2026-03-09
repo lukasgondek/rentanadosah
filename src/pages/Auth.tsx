@@ -75,7 +75,7 @@ const Auth = () => {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/rentanadosah/`,
           data: {
             full_name: fullName.trim(),
           },
@@ -177,7 +177,7 @@ const handleForgotPassword = async () => {
   try {
     setIsResetting(true);
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${window.location.origin}/rentanadosah/reset-password`,
     });
 
     if (error) throw error;
