@@ -14,6 +14,7 @@ import {
   X,
   Shield,
 } from "lucide-react";
+import Logo from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
 interface LayoutProps {
@@ -56,11 +57,10 @@ const Layout = ({ children, activeTab, onTabChange, isAdmin = false }: LayoutPro
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-primary" />
-            </div>
-            <h1 className="text-xl font-bold">Kalkulačka REALITNÍHO RENTIÉRA®</h1>
+          <div className="flex items-center gap-3">
+            <Logo size={40} />
+            <h1 className="text-xl font-bold hidden sm:block">Kalkulačka REALITNÍHO RENTIÉRA®</h1>
+            <h1 className="text-lg font-bold sm:hidden">Kalkulačka RR®</h1>
           </div>
           <div className="flex items-center gap-4">
             <Button

@@ -2,103 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Design system — Navy + Gold theme matching the RR logo
+   Primary: Deep navy blue
+   Accent: Warm gold
+   All colors in HSL format.
 */
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 215 25% 27%;
+    --background: 220 25% 97%;
+    --foreground: 222 35% 18%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 27%;
+    --card-foreground: 222 35% 18%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 27%;
+    --popover-foreground: 222 35% 18%;
 
-    --primary: 214 95% 36%;
+    --primary: 220 58% 27%;
     --primary-foreground: 0 0% 100%;
-    
-    --primary-light: 214 95% 88%;
-    --success: 142 76% 36%;
-    --success-light: 142 76% 94%;
-    --warning: 38 92% 50%;
-    --warning-light: 38 92% 95%;
 
-    --secondary: 215 20% 65%;
+    --primary-light: 220 40% 92%;
+    --success: 152 60% 36%;
+    --success-light: 152 50% 94%;
+    --warning: 42 65% 50%;
+    --warning-light: 42 60% 94%;
+
+    --secondary: 220 15% 60%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 215 30% 96%;
-    --muted-foreground: 215 15% 50%;
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 12% 46%;
 
-    --accent: 142 76% 36%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 42 65% 50%;
+    --accent-foreground: 222 40% 15%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 20% 88%;
-    --input: 215 20% 88%;
-    --ring: 214 95% 36%;
+    --border: 220 18% 88%;
+    --input: 220 18% 88%;
+    --ring: 220 58% 27%;
 
     --radius: 0.75rem;
 
-    --chart-1: 214 95% 36%;
-    --chart-2: 142 76% 36%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --chart-1: 220 58% 27%;
+    --chart-2: 42 65% 50%;
+    --chart-3: 152 60% 36%;
+    --chart-4: 280 55% 55%;
+    --chart-5: 340 65% 52%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(214 95% 36%) 0%, hsl(214 95% 50%) 100%);
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(142 76% 50%) 100%);
-    --shadow-card: 0 4px 6px -1px hsl(215 25% 27% / 0.1), 0 2px 4px -1px hsl(215 25% 27% / 0.06);
-    --shadow-lg: 0 10px 15px -3px hsl(215 25% 27% / 0.1), 0 4px 6px -2px hsl(215 25% 27% / 0.05);
+    --gradient-primary: linear-gradient(135deg, hsl(220 58% 27%) 0%, hsl(220 55% 40%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(152 60% 36%) 0%, hsl(152 55% 48%) 100%);
+    --shadow-card: 0 4px 6px -1px hsl(222 35% 18% / 0.1), 0 2px 4px -1px hsl(222 35% 18% / 0.06);
+    --shadow-lg: 0 10px 15px -3px hsl(222 35% 18% / 0.1), 0 4px 6px -2px hsl(222 35% 18% / 0.05);
   }
 
   .dark {
-    --background: 215 28% 17%;
-    --foreground: 210 40% 98%;
+    --background: 222 35% 12%;
+    --foreground: 220 20% 96%;
 
-    --card: 215 28% 20%;
-    --card-foreground: 210 40% 98%;
+    --card: 222 32% 16%;
+    --card-foreground: 220 20% 96%;
 
-    --popover: 215 28% 20%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 222 32% 16%;
+    --popover-foreground: 220 20% 96%;
 
-    --primary: 214 95% 50%;
+    --primary: 220 55% 48%;
     --primary-foreground: 0 0% 100%;
-    
-    --primary-light: 214 95% 25%;
-    --success: 142 76% 45%;
-    --success-light: 142 76% 20%;
-    --warning: 38 92% 55%;
-    --warning-light: 38 92% 25%;
 
-    --secondary: 215 20% 40%;
-    --secondary-foreground: 210 40% 98%;
+    --primary-light: 220 40% 22%;
+    --success: 152 55% 44%;
+    --success-light: 152 45% 20%;
+    --warning: 42 60% 55%;
+    --warning-light: 42 55% 22%;
 
-    --muted: 215 28% 25%;
-    --muted-foreground: 215 15% 65%;
+    --secondary: 220 15% 38%;
+    --secondary-foreground: 220 20% 96%;
 
-    --accent: 142 76% 45%;
-    --accent-foreground: 0 0% 100%;
+    --muted: 222 25% 20%;
+    --muted-foreground: 220 12% 62%;
+
+    --accent: 42 60% 55%;
+    --accent-foreground: 222 35% 10%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 28% 30%;
-    --input: 215 28% 30%;
-    --ring: 214 95% 50%;
+    --border: 222 25% 26%;
+    --input: 222 25% 26%;
+    --ring: 220 55% 48%;
 
-    --chart-1: 214 95% 50%;
-    --chart-2: 142 76% 45%;
-    --chart-3: 38 92% 55%;
-    --chart-4: 280 65% 65%;
-    --chart-5: 340 75% 60%;
+    --chart-1: 220 55% 48%;
+    --chart-2: 42 60% 55%;
+    --chart-3: 152 55% 44%;
+    --chart-4: 280 55% 62%;
+    --chart-5: 340 65% 58%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(214 95% 40%) 0%, hsl(214 95% 60%) 100%);
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 40%) 0%, hsl(142 76% 60%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(220 55% 38%) 0%, hsl(220 55% 55%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(152 55% 38%) 0%, hsl(152 50% 55%) 100%);
     --shadow-card: 0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -1px hsl(0 0% 0% / 0.2);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.3), 0 4px 6px -2px hsl(0 0% 0% / 0.2);
   }

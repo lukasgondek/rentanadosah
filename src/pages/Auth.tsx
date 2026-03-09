@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, TrendingUp, ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink } from "lucide-react";
+import Logo from "@/components/Logo";
 import { z } from "zod";
 
 const signUpSchema = z.object({
@@ -211,9 +212,7 @@ return (
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-2 text-center">
           <div className="flex justify-center mb-2">
-            <div className="p-3 bg-primary/10 rounded-full">
-              <TrendingUp className="w-8 h-8 text-primary" />
-            </div>
+            <Logo size={64} />
           </div>
           <CardTitle className="text-2xl">Kalkulačka REALITNÍHO RENTIÉRA®</CardTitle>
           <CardDescription>
