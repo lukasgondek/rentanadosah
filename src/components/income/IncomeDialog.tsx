@@ -90,17 +90,14 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     e.preventDefault();
     
     // Validate form data
-    try {
-      incomeValidationSchema.parse(formData);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast({ 
-          title: "Chyba validace", 
-          description: error.errors[0].message, 
-          variant: "destructive" 
-        });
-        return;
-      }
+    const validationResult = incomeValidationSchema.safeParse(formData);
+    if (!validationResult.success) {
+      toast({
+        title: "Chyba validace",
+        description: validationResult.error.errors[0].message,
+        variant: "destructive"
+      });
+      return;
     }
     
     const { data: { user } } = await supabase.auth.getUser();

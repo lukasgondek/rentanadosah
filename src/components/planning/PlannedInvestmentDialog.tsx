@@ -165,31 +165,28 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    try {
-      const validationData = {
-        property_identifier: formData.property_identifier,
-        purchase_price: parseFloat(formData.purchase_price),
-        estimated_value: parseFloat(formData.estimated_value),
-        monthly_rent: parseFloat(formData.monthly_rent),
-        monthly_expenses: parseFloat(formData.monthly_expenses),
-        appreciation_percent: parseFloat(formData.appreciation_percent),
-        rent_growth_percent: parseFloat(formData.rent_growth_percent),
-        loan_amount: parseFloat(formData.loan_amount),
-        interest_rate: parseFloat(formData.interest_rate),
-        ltv_percent: parseFloat(formData.ltv_percent),
-        term_months: parseInt(formData.term_months),
-      };
+    const validationData = {
+      property_identifier: formData.property_identifier,
+      purchase_price: parseFloat(formData.purchase_price),
+      estimated_value: parseFloat(formData.estimated_value),
+      monthly_rent: parseFloat(formData.monthly_rent),
+      monthly_expenses: parseFloat(formData.monthly_expenses),
+      appreciation_percent: parseFloat(formData.appreciation_percent),
+      rent_growth_percent: parseFloat(formData.rent_growth_percent),
+      loan_amount: parseFloat(formData.loan_amount),
+      interest_rate: parseFloat(formData.interest_rate),
+      ltv_percent: parseFloat(formData.ltv_percent),
+      term_months: parseInt(formData.term_months),
+    };
 
-      plannedInvestmentSchema.parse(validationData);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast({
-          title: "Chyba validace",
-          description: error.errors[0].message,
-          variant: "destructive",
-        });
-        return;
-      }
+    const validationResult = plannedInvestmentSchema.safeParse(validationData);
+    if (!validationResult.success) {
+      toast({
+        title: "Chyba validace",
+        description: validationResult.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
     }
 
     const { data: { user } } = await supabase.auth.getUser();
