@@ -1,0 +1,46 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build
+        env:
+          VITE_SUPABASE_PROJECT_ID: "mgvqsvtkwtqhieqnkgrh"
+          VITE_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndnFzdnRrd3RxaGllcW5rZ3JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NTQxODUsImV4cCI6MjA3ODAzMDE4NX0.q8PGl5n3QjsNGMZNB0JLzGWizIlXc2lp3U2ED8qA9ws"
+          VITE_SUPABASE_URL: "https://mgvqsvtkwtqhieqnkgrh.supabase.co"
+        run: npm run build
+      - name: Copy 404.html for SPA routing
+        run: cp dist/index.html dist/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
