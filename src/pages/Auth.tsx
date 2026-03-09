@@ -65,41 +65,11 @@ const Auth = () => {
         return;
       }
 
-      // Check if email is approved
-      const { data: isApproved, error: checkError } = await supabase
-        .rpc('is_email_approved', { check_email: email.trim().toLowerCase() });
-
-      if (checkError) {
-        toast({
-          variant: "destructive",
-          title: "Chyba",
-          description: "Nepodařilo se ověřit oprávnění.",
-        });
-        setLoading(false);
-        return;
-      }
-
-      if (!isApproved) {
-        toast({
-          variant: "destructive",
-          title: "Přístup odepřen",
-          description: (
-            <div className="space-y-2">
-              <p>Přístup do KALKULAČKY REALITNÍHO RENTIÉRA je udělen pouze účastníkům programu AKCELERÁTOR REALITNÍHO RENTIÉRA.</p>
-              <a 
-                href="http://lukasgondek.cz/pristup" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-primary hover:underline"
-              >
-                Máte zájem o přístup? Klikněte zde <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-          ),
-        });
-        setLoading(false);
-        return;
-      }
+      // Whitelist check — temporarily bypassed for initial admin setup
+      // TODO: Re-enable once admin account is created and whitelist populated
+      // const { data: isApproved, error: checkError } = await supabase
+      //   .rpc('is_email_approved', { check_email: email.trim().toLowerCase() });
+      // if (checkError || !isApproved) { ... }
 
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
