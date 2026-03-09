@@ -212,7 +212,7 @@ return (
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-2 text-center">
           <div className="flex justify-center mb-4">
-            <Logo size={120} />
+            <Logo size={256} />
           </div>
           <CardTitle className="text-2xl">Kalkulačka REALITNÍHO RENTIÉRA®</CardTitle>
           <CardDescription>
