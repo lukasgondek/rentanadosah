@@ -26,9 +26,9 @@ jobs:
       - run: npm ci
       - name: Build
         env:
-          VITE_SUPABASE_PROJECT_ID: "mgvqsvtkwtqhieqnkgrh"
-          VITE_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndnFzdnRrd3RxaGllcW5rZ3JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NTQxODUsImV4cCI6MjA3ODAzMDE4NX0.q8PGl5n3QjsNGMZNB0JLzGWizIlXc2lp3U2ED8qA9ws"
-          VITE_SUPABASE_URL: "https://mgvqsvtkwtqhieqnkgrh.supabase.co"
+          VITE_SUPABASE_PROJECT_ID: "cihocfgnphqzjzliuzxk"
+          VITE_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpaG9jZmducGhxemp6bGl1enhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNjUxNTksImV4cCI6MjA4ODY0MTE1OX0.xqa22SAtq-94tYtQ_eUDQc3gbqlr2jlje2SStxE0Q1A"
+          VITE_SUPABASE_URL: "https://cihocfgnphqzjzliuzxk.supabase.co"
         run: npm run build
       - name: Copy 404.html for SPA routing
         run: cp dist/index.html dist/404.html
