@@ -65,11 +65,18 @@ const Auth = () => {
         return;
       }
 
-      // Whitelist check — temporarily bypassed for initial admin setup
-      // TODO: Re-enable once admin account is created and whitelist populated
-      // const { data: isApproved, error: checkError } = await supabase
-      //   .rpc('is_email_approved', { check_email: email.trim().toLowerCase() });
-      // if (checkError || !isApproved) { ... }
+      // Whitelist check — only approved emails can register
+      const { data: isApproved, error: checkError } = await supabase
+        .rpc('is_email_approved', { check_email: email.trim().toLowerCase() });
+      if (checkError || !isApproved) {
+        toast({
+          variant: "destructive",
+          title: "Přístup zamítnut",
+          description: "Tento email nemá povolen přístup. Kontaktujte správce.",
+        });
+        setLoading(false);
+        return;
+      }
 
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
