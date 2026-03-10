@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Search, User } from "lucide-react";
 import { ApprovedEmailsManager } from "./ApprovedEmailsManager";
 
 interface Client {
@@ -22,7 +23,17 @@ interface AdminDashboardProps {
 export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashboardProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+
+  const filteredClients = clients.filter((client) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      client.email.toLowerCase().includes(q) ||
+      (client.full_name && client.full_name.toLowerCase().includes(q))
+    );
+  });
 
   useEffect(() => {
     fetchClients();
@@ -82,12 +93,23 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
               <CardHeader>
                 <CardTitle>Seznam klientů</CardTitle>
                 <CardDescription>
-                  Celkem {clients.length} {clients.length === 1 ? "klient" : clients.length < 5 ? "klienti" : "klientů"}
+                  {searchQuery
+                    ? `Nalezeno ${filteredClients.length} z ${clients.length}`
+                    : `Celkem ${clients.length} ${clients.length === 1 ? "klient" : clients.length < 5 ? "klienti" : "klientů"}`}
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Hledat klienta podle jména nebo e-mailu..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
                 <div className="grid gap-4">
-                  {clients.map((client) => (
+                  {filteredClients.map((client) => (
                     <Card key={client.id} className="hover:bg-accent/50 transition-colors cursor-pointer">
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
@@ -112,9 +134,9 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
                       </CardContent>
                     </Card>
                   ))}
-                  {clients.length === 0 && (
+                  {filteredClients.length === 0 && (
                     <div className="text-center py-8 text-muted-foreground">
-                      Zatím nejsou žádní registrovaní klienti
+                      {searchQuery ? "Žádný klient neodpovídá hledání" : "Zatím nejsou žádní registrovaní klienti"}
                     </div>
                   )}
                 </div>

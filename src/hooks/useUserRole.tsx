@@ -21,13 +21,13 @@ export const useUserRole = () => {
         const { data, error } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", user.id)
-          .single();
+          .eq("user_id", user.id);
 
-        if (error) {
+        if (error || !data || data.length === 0) {
           setRole("user");
         } else {
-          setRole(data?.role as UserRole);
+          const hasAdmin = data.some((r) => r.role === "admin");
+          setRole(hasAdmin ? "admin" : "user");
         }
       } catch (error) {
         setRole("user");
