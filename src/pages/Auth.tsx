@@ -79,7 +79,7 @@ const Auth = () => {
         return;
       }
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -104,10 +104,24 @@ const Auth = () => {
             description: error.message,
           });
         }
-      } else {
+      } else if (data?.session) {
+        // Auto-confirmed — user is immediately logged in, redirect via onAuthStateChange
         toast({
           title: "Úspěšná registrace!",
-          description: "Nyní se můžete přihlásit.",
+          description: "Přihlašujeme vás...",
+        });
+      } else if (data?.user && !data.user.identities?.length) {
+        // User already exists (Supabase anti-enumeration response)
+        toast({
+          variant: "destructive",
+          title: "Email již existuje",
+          description: "Tento email je již zaregistrován. Zkuste se přihlásit.",
+        });
+      } else {
+        // Email confirmation needed
+        toast({
+          title: "Registrace odeslána!",
+          description: "Zkontrolujte svůj email pro potvrzení účtu.",
         });
         setEmail("");
         setPassword("");
