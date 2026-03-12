@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ExternalLink } from "lucide-react";
 import Logo from "@/components/Logo";
@@ -29,6 +30,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showAccessDenied, setShowAccessDenied] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const navigate = useNavigate();
@@ -310,7 +312,29 @@ return (
                     minLength={6}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="terms"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                  />
+                  <label
+                    htmlFor="terms"
+                    className="text-sm leading-relaxed cursor-pointer"
+                  >
+                    Souhlasím s{" "}
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      podmínkami používání a zpracováním osobních údajů
+                    </a>
+                  </label>
+                </div>
+                <Button type="submit" className="w-full" disabled={loading || !agreedToTerms}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Registrovat se
                 </Button>
