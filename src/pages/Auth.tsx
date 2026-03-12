@@ -28,6 +28,7 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showAccessDenied, setShowAccessDenied] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [isResetting, setIsResetting] = useState(false);
   const navigate = useNavigate();
@@ -70,12 +71,8 @@ const Auth = () => {
       const { data: isApproved, error: checkError } = await supabase
         .rpc('is_email_approved', { check_email: email.trim().toLowerCase() });
       if (checkError || !isApproved) {
-        toast({
-          variant: "destructive",
-          title: "Přístup zamítnut",
-          description: "Tento email nemá povolen přístup. Kontaktujte správce.",
-        });
         setLoading(false);
+        setShowAccessDenied(true);
         return;
       }
 
@@ -366,6 +363,45 @@ return (
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Access Denied Dialog */}
+      {showAccessDenied && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md shadow-lg">
+            <CardHeader className="text-center">
+              <CardTitle className="text-xl">Přístup pouze pro klienty</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-center text-muted-foreground leading-relaxed">
+                Tato aplikace je přístupná pouze klientům Realitního Rentiéra jako nástroj
+                strategického budování realitního portfolia.
+              </p>
+              <p className="text-center text-muted-foreground leading-relaxed">
+                O výhodách a potenciálu této spolupráce se dozvíte nejvíce na webináři:
+              </p>
+              <div className="flex justify-center">
+                <a
+                  href="https://realitnirentier.cz/renta-na-dosah"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-primary hover:underline font-semibold text-lg"
+                >
+                  Realitní renta na dosah
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAccessDenied(false)}
+                >
+                  Zpět
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
