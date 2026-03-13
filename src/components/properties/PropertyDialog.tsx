@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -251,21 +252,19 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Kupní cena (Kč)</Label>
-              <Input
-                type="number"
+              <FormattedNumberInput
                 value={formData.purchase_price}
-                onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
-                placeholder="5000000"
+                onValueChange={(v) => setFormData({ ...formData, purchase_price: v })}
+                placeholder="5.000.000"
                 required
               />
             </div>
             <div className="space-y-2">
               <Label>Odhadní hodnota (Kč)</Label>
-              <Input
-                type="number"
+              <FormattedNumberInput
                 value={formData.estimated_value}
-                onChange={(e) => setFormData({ ...formData, estimated_value: e.target.value })}
-                placeholder="5500000"
+                onValueChange={(v) => setFormData({ ...formData, estimated_value: v })}
+                placeholder="5.500.000"
                 required
               />
             </div>
@@ -276,20 +275,18 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Měsíční nájem (Kč)</Label>
-                <Input
-                  type="number"
+                <FormattedNumberInput
                   value={formData.monthly_rent}
-                  onChange={(e) => setFormData({ ...formData, monthly_rent: e.target.value })}
-                  placeholder="25000"
+                  onValueChange={(v) => setFormData({ ...formData, monthly_rent: v })}
+                  placeholder="25.000"
                 />
               </div>
               <div className="space-y-2">
                 <Label>Měsíční výdaje (Kč)</Label>
-                <Input
-                  type="number"
+                <FormattedNumberInput
                   value={formData.monthly_expenses}
-                  onChange={(e) => setFormData({ ...formData, monthly_expenses: e.target.value })}
-                  placeholder="5000"
+                  onValueChange={(v) => setFormData({ ...formData, monthly_expenses: v })}
+                  placeholder="5.000"
                 />
               </div>
             </div>
@@ -330,21 +327,19 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Nájem/měs (Kč)</Label>
-                        <Input
-                          type="number"
+                        <FormattedNumberInput
                           value={unit.monthly_rent}
-                          onChange={(e) => updateUnit(idx, "monthly_rent", e.target.value)}
-                          placeholder="15000"
+                          onValueChange={(v) => updateUnit(idx, "monthly_rent", v)}
+                          placeholder="15.000"
                           className="h-8 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Náklady/měs (Kč)</Label>
-                        <Input
-                          type="number"
+                        <FormattedNumberInput
                           value={unit.monthly_expenses}
-                          onChange={(e) => updateUnit(idx, "monthly_expenses", e.target.value)}
-                          placeholder="3000"
+                          onValueChange={(v) => updateUnit(idx, "monthly_expenses", v)}
+                          placeholder="3.000"
                           className="h-8 text-sm"
                         />
                       </div>
@@ -364,11 +359,10 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
                     {unit.is_cadastrally_separated && (
                       <div className="space-y-1">
                         <Label className="text-xs">Odhadní hodnota jednotky (Kč)</Label>
-                        <Input
-                          type="number"
+                        <FormattedNumberInput
                           value={unit.estimated_value}
-                          onChange={(e) => updateUnit(idx, "estimated_value", e.target.value)}
-                          placeholder="2500000"
+                          onValueChange={(v) => updateUnit(idx, "estimated_value", v)}
+                          placeholder="2.500.000"
                           className="h-8 text-sm"
                         />
                       </div>

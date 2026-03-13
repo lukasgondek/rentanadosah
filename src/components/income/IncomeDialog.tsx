@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -252,28 +253,25 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Hrubá mzda (Kč/měsíc)</Label>
-                  <Input
-                    type="number"
-                    value={formData.grossSalary || ""}
-                    onChange={(e) => {
-                      const gross = parseNum(e.target.value);
+                  <FormattedNumberInput
+                    value={formData.grossSalary?.toString() || ""}
+                    onValueChange={(v) => {
+                      const gross = parseNum(v);
                       const updates: Partial<IncomeFormData> = { grossSalary: gross };
-                      // Auto-calculate net salary
                       if (gross && gross > 0) {
                         updates.netSalary = grossToNet(gross);
                       }
                       setFormData({ ...formData, ...updates });
                     }}
-                    placeholder="50000"
+                    placeholder="50.000"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Čistá mzda (Kč/měsíc)</Label>
-                  <Input
-                    type="number"
-                    value={formData.netSalary || ""}
-                    onChange={(e) => setFormData({ ...formData, netSalary: parseNum(e.target.value) })}
-                    placeholder="37500"
+                  <FormattedNumberInput
+                    value={formData.netSalary?.toString() || ""}
+                    onValueChange={(v) => setFormData({ ...formData, netSalary: parseNum(v) })}
+                    placeholder="37.500"
                   />
                 </div>
               </div>
@@ -289,11 +287,10 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Příjmy (Kč/rok)</Label>
-                <Input
-                  type="number"
-                  value={formData.incomeAmount || ""}
-                  onChange={(e) => setFormData({ ...formData, incomeAmount: parseNum(e.target.value) })}
-                  placeholder="100000"
+                <FormattedNumberInput
+                  value={formData.incomeAmount?.toString() || ""}
+                  onValueChange={(v) => setFormData({ ...formData, incomeAmount: parseNum(v) })}
+                  placeholder="100.000"
                   required
                 />
               </div>
@@ -334,11 +331,10 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
               {formData.expenseType === "real" && (
                 <div className="space-y-2">
                   <Label>Reálné výdaje (Kč/rok)</Label>
-                  <Input
-                    type="number"
-                    value={formData.realExpenses || ""}
-                    onChange={(e) => setFormData({ ...formData, realExpenses: parseNum(e.target.value) })}
-                    placeholder="36000"
+                  <FormattedNumberInput
+                    value={formData.realExpenses?.toString() || ""}
+                    onValueChange={(v) => setFormData({ ...formData, realExpenses: parseNum(v) })}
+                    placeholder="36.000"
                     required
                   />
                   {formData.incomeAmount && formData.realExpenses && (
@@ -355,21 +351,19 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Příjmy (Kč/rok)</Label>
-                <Input
-                  type="number"
-                  value={formData.businessIncome || ""}
-                  onChange={(e) => setFormData({ ...formData, businessIncome: parseNum(e.target.value) })}
-                  placeholder="500000"
+                <FormattedNumberInput
+                  value={formData.businessIncome?.toString() || ""}
+                  onValueChange={(v) => setFormData({ ...formData, businessIncome: parseNum(v) })}
+                  placeholder="500.000"
                   required
                 />
               </div>
               <div className="space-y-2">
                 <Label>Výdaje (Kč/rok)</Label>
-                <Input
-                  type="number"
-                  value={formData.businessExpenses || ""}
-                  onChange={(e) => setFormData({ ...formData, businessExpenses: parseNum(e.target.value) })}
-                  placeholder="300000"
+                <FormattedNumberInput
+                  value={formData.businessExpenses?.toString() || ""}
+                  onValueChange={(v) => setFormData({ ...formData, businessExpenses: parseNum(v) })}
+                  placeholder="300.000"
                   required
                 />
               </div>
@@ -385,11 +379,10 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Výše příjmu (Kč)</Label>
-                <Input
-                  type="number"
-                  value={formData.otherAmount || ""}
-                  onChange={(e) => setFormData({ ...formData, otherAmount: parseNum(e.target.value) })}
-                  placeholder="10000"
+                <FormattedNumberInput
+                  value={formData.otherAmount?.toString() || ""}
+                  onValueChange={(v) => setFormData({ ...formData, otherAmount: parseNum(v) })}
+                  placeholder="10.000"
                   required
                 />
               </div>

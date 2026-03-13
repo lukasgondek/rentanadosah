@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
@@ -345,15 +346,15 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Původní výše úvěru (Kč)</Label>
-              <Input type="number" value={formData.original_amount}
-                onChange={(e) => setFormData({ ...formData, original_amount: e.target.value })}
-                placeholder="3000000" required />
+              <FormattedNumberInput value={formData.original_amount}
+                onValueChange={(v) => setFormData({ ...formData, original_amount: v })}
+                placeholder="3.000.000" required />
             </div>
             <div className="space-y-2">
               <Label>Zbývající dluh (Kč)</Label>
-              <Input type="number" value={formData.remaining_principal}
-                onChange={(e) => setFormData({ ...formData, remaining_principal: e.target.value })}
-                placeholder="2500000" required />
+              <FormattedNumberInput value={formData.remaining_principal}
+                onValueChange={(v) => setFormData({ ...formData, remaining_principal: v })}
+                placeholder="2.500.000" required />
             </div>
           </div>
 
@@ -375,12 +376,12 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Měsíční splátka (Kč)</Label>
-              <Input type="number" value={formData.monthly_payment}
-                onChange={(e) => {
+              <FormattedNumberInput value={formData.monthly_payment}
+                onValueChange={(v) => {
                   setIsPaymentManual(true);
-                  setFormData({ ...formData, monthly_payment: e.target.value });
+                  setFormData({ ...formData, monthly_payment: v });
                 }}
-                placeholder="18000" required />
+                placeholder="18.000" required />
               {!isPaymentManual && formData.monthly_payment && (
                 <p className="text-xs text-muted-foreground">
                   Automatický výpočet ({formatNumber(parseNum(formData.monthly_payment) || 0)} Kč). Můžete přepsat.
@@ -454,9 +455,9 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Výše zástavy (Kč)</Label>
-                  <Input type="number" value={col.amount}
-                    onChange={(e) => updateCollateralAmount(idx, e.target.value)}
-                    placeholder="3000000" className="h-8 text-sm" />
+                  <FormattedNumberInput value={col.amount}
+                    onValueChange={(v) => updateCollateralAmount(idx, v)}
+                    placeholder="3.000.000" className="h-8 text-sm" />
                 </div>
               </div>
             ))}

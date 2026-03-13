@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -94,12 +95,10 @@ export const ExpenseDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
           <div className="space-y-2">
             <Label>Výše výdaje (Kč)</Label>
-            <Input
-              type="number"
-              value={formData.amount ?? ""}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value ? parseFloat(e.target.value) : undefined })}
-              placeholder="5000"
-              min="0"
+            <FormattedNumberInput
+              value={formData.amount?.toString() || ""}
+              onValueChange={(v) => setFormData({ ...formData, amount: v ? parseFloat(v) : undefined })}
+              placeholder="5.000"
               required
             />
           </div>

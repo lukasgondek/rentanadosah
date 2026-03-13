@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
@@ -142,11 +143,10 @@ export const InvestmentDialog = ({ onSuccess, editData }: InvestmentDialogProps)
 
           <div className="space-y-2">
             <Label>Hodnota investice (Kč)</Label>
-            <Input
-              type="number"
+            <FormattedNumberInput
               value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              placeholder="100000"
+              onValueChange={(v) => setFormData({ ...formData, amount: v })}
+              placeholder="100.000"
               required
             />
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -304,11 +305,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
               </div>
               <div className="space-y-2">
                 <Label>Kupní cena (Kč) *</Label>
-                <Input
-                  type="number"
+                <FormattedNumberInput
                   value={formData.purchase_price}
-                  onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })}
-                  placeholder="5000000"
+                  onValueChange={(v) => setFormData({ ...formData, purchase_price: v })}
+                  placeholder="5.000.000"
                   required
                 />
               </div>
@@ -317,21 +317,19 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Odhadní cena (Kč) *</Label>
-                <Input
-                  type="number"
+                <FormattedNumberInput
                   value={formData.estimated_value}
-                  onChange={(e) => setFormData({ ...formData, estimated_value: e.target.value })}
-                  placeholder="5200000"
+                  onValueChange={(v) => setFormData({ ...formData, estimated_value: v })}
+                  placeholder="5.200.000"
                   required
                 />
               </div>
               <div className="space-y-2">
                 <Label>Měsíční nájem (Kč) *</Label>
-                <Input
-                  type="number"
+                <FormattedNumberInput
                   value={formData.monthly_rent}
-                  onChange={(e) => setFormData({ ...formData, monthly_rent: e.target.value })}
-                  placeholder="25000"
+                  onValueChange={(v) => setFormData({ ...formData, monthly_rent: v })}
+                  placeholder="25.000"
                   required
                 />
               </div>
@@ -340,11 +338,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Měsíční výdaje (Kč) *</Label>
-                <Input
-                  type="number"
+                <FormattedNumberInput
                   value={formData.monthly_expenses}
-                  onChange={(e) => setFormData({ ...formData, monthly_expenses: e.target.value })}
-                  placeholder="5000"
+                  onValueChange={(v) => setFormData({ ...formData, monthly_expenses: v })}
+                  placeholder="5.000"
                   required
                 />
               </div>
@@ -388,11 +385,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Výše úvěru (Kč) *</Label>
-                <Input
-                  type="number"
+                <FormattedNumberInput
                   value={formData.loan_amount}
-                  onChange={(e) => setFormData({ ...formData, loan_amount: e.target.value })}
-                  placeholder="4000000"
+                  onValueChange={(v) => setFormData({ ...formData, loan_amount: v })}
+                  placeholder="4.000.000"
                   required
                 />
               </div>
