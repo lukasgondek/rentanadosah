@@ -1,22 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { z } from "zod";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const propertyValidationSchema = z.object({
-  identifier: z.string().trim().min(1, "Identifikátor je povinný").max(200, "Identifikátor je příliš dlouhý"),
-  purchase_price: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká"),
-  estimated_value: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká"),
-  monthly_rent: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  monthly_expenses: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  yearly_appreciation_percent: z.number().min(-100, "Procento nemůže být nižší než -100").max(1000, "Procento je příliš vysoké").optional(),
-});
+/** Safely parse a numeric input value — returns undefined for empty/NaN */
+const parseNum = (val: string): number | undefined => {
+  if (!val || val.trim() === "") return undefined;
+  const num = parseFloat(val);
+  return isNaN(num) ? undefined : num;
+};
 
 interface PropertyDialogProps {
   onSuccess: () => void;
@@ -24,8 +22,9 @@ interface PropertyDialogProps {
 }
 
 export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
+  const [loans, setLoans] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     identifier: editData?.identifier || "",
     purchase_price: editData?.purchase_price?.toString() || "",
@@ -34,32 +33,33 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
     monthly_expenses: editData?.monthly_expenses?.toString() || "",
     yearly_appreciation_percent: editData?.yearly_appreciation_percent?.toString() || "",
     is_forecast: editData?.is_forecast || false,
+    loan_id: editData?.loan_id || "",
   });
+
+  // Fetch user's loans for the "Propojit s úvěrem" select
+  useEffect(() => {
+    const fetchLoans = async () => {
+      const { data } = await supabase
+        .from("loans")
+        .select("id, name, original_amount")
+        .order("created_at", { ascending: false });
+      setLoans(data || []);
+    };
+    fetchLoans();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    try {
-      const validationData = {
-        identifier: formData.identifier,
-        purchase_price: parseFloat(formData.purchase_price),
-        estimated_value: parseFloat(formData.estimated_value),
-        monthly_rent: formData.monthly_rent ? parseFloat(formData.monthly_rent) : undefined,
-        monthly_expenses: formData.monthly_expenses ? parseFloat(formData.monthly_expenses) : undefined,
-        yearly_appreciation_percent: formData.yearly_appreciation_percent ? parseFloat(formData.yearly_appreciation_percent) : undefined,
-      };
+    const showError = (msg: string) => {
+      toast({ title: "Chyba validace", description: msg, variant: "destructive" });
+    };
 
-      propertyValidationSchema.parse(validationData);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast({
-          title: "Chyba validace",
-          description: error.errors[0].message,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
+    if (!formData.identifier.trim()) { showError("Vyplňte identifikátor nemovitosti"); return; }
+    const purchasePrice = parseNum(formData.purchase_price);
+    const estimatedValue = parseNum(formData.estimated_value);
+    if (!purchasePrice || purchasePrice <= 0) { showError("Vyplňte kupní cenu"); return; }
+    if (!estimatedValue || estimatedValue <= 0) { showError("Vyplňte odhadní hodnotu"); return; }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -73,13 +73,14 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
 
     const dataToSave = {
       user_id: user.id,
-      identifier: formData.identifier,
-      purchase_price: parseFloat(formData.purchase_price),
-      estimated_value: parseFloat(formData.estimated_value),
-      monthly_rent: formData.monthly_rent ? parseFloat(formData.monthly_rent) : null,
-      monthly_expenses: formData.monthly_expenses ? parseFloat(formData.monthly_expenses) : null,
-      yearly_appreciation_percent: formData.yearly_appreciation_percent ? parseFloat(formData.yearly_appreciation_percent) : null,
+      identifier: formData.identifier.trim(),
+      purchase_price: purchasePrice,
+      estimated_value: estimatedValue,
+      monthly_rent: parseNum(formData.monthly_rent) ?? null,
+      monthly_expenses: parseNum(formData.monthly_expenses) ?? null,
+      yearly_appreciation_percent: parseNum(formData.yearly_appreciation_percent) ?? null,
       is_forecast: formData.is_forecast,
+      loan_id: formData.loan_id || null,
     };
 
     let error;
@@ -111,6 +112,7 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
       monthly_expenses: "",
       yearly_appreciation_percent: "",
       is_forecast: false,
+      loan_id: "",
     });
     setOpen(false);
     onSuccess();
@@ -201,6 +203,28 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
             />
           </div>
 
+          {loans.length > 0 && (
+            <div className="space-y-2">
+              <Label>Propojit s úvěrem <span className="text-muted-foreground font-normal">— nepovinné</span></Label>
+              <Select
+                value={formData.loan_id}
+                onValueChange={(v) => setFormData({ ...formData, loan_id: v === "none" ? "" : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Žádný úvěr" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Žádný úvěr</SelectItem>
+                  {loans.map((loan) => (
+                    <SelectItem key={loan.id} value={loan.id}>
+                      {loan.name} ({new Intl.NumberFormat("cs-CZ").format(loan.original_amount)} Kč)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="flex items-center space-x-2">
             <Checkbox
               id="is_forecast"
@@ -217,7 +241,7 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
               Zrušit
             </Button>
             <Button type="submit">
-              Přidat nemovitost
+              {editData ? "Uložit změny" : "Přidat nemovitost"}
             </Button>
           </div>
         </form>

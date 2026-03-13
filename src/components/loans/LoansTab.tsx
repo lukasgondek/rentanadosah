@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatNumber as fmtNumber } from "@/lib/utils";
 
 export default function LoansTab({ userId: viewUserId }: { userId?: string | null } = {}) {
   const [loans, setLoans] = useState<any[]>([]);
@@ -60,8 +61,8 @@ export default function LoansTab({ userId: viewUserId }: { userId?: string | nul
   };
 
   const formatNumber = (num: number | null) => {
-    if (num === null) return "-";
-    return new Intl.NumberFormat("cs-CZ").format(num);
+    if (num === null || num === undefined) return "-";
+    return fmtNumber(num);
   };
 
   return (

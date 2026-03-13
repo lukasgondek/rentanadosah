@@ -4,8 +4,9 @@ import { PlannedInvestmentDialog } from "./PlannedInvestmentDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatNumber as fmtNumber, calculateAnnuity } from "@/lib/utils";
 
 export default function PlanningTab({ userId: viewUserId }: { userId?: string | null } = {}) {
   const [investments, setInvestments] = useState<any[]>([]);
@@ -59,9 +60,75 @@ export default function PlanningTab({ userId: viewUserId }: { userId?: string | 
     fetchInvestments();
   };
 
+  const [realizingId, setRealizingId] = useState<string | null>(null);
+
   const formatNumber = (num: number | null) => {
-    if (num === null) return "-";
-    return new Intl.NumberFormat("cs-CZ").format(num);
+    if (num === null || num === undefined) return "-";
+    return fmtNumber(num);
+  };
+
+  const handleRealize = async (id: string) => {
+    const inv = investments.find((i) => i.id === id);
+    if (!inv) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // 1. Create property
+    const { data: newProperty, error: propError } = await supabase.from("properties").insert({
+      user_id: user.id,
+      identifier: inv.property_identifier,
+      purchase_price: inv.purchase_price,
+      estimated_value: inv.estimated_value,
+      monthly_rent: inv.monthly_rent,
+      monthly_expenses: inv.monthly_expenses,
+      yearly_appreciation_percent: inv.appreciation_percent,
+      is_forecast: false,
+    }).select("id").single();
+
+    if (propError) {
+      toast({ title: "Chyba", description: "Nepodařilo se vytvořit nemovitost", variant: "destructive" });
+      return;
+    }
+
+    // 2. Create loan
+    const termMonths = inv.term_months || 300;
+    const monthlyPayment = calculateAnnuity(inv.loan_amount, inv.interest_rate, termMonths);
+
+    const { data: newLoan, error: loanError } = await supabase.from("loans").insert({
+      user_id: user.id,
+      name: `Úvěr — ${inv.property_identifier}`,
+      original_amount: inv.loan_amount,
+      remaining_principal: inv.loan_amount,
+      interest_rate: inv.interest_rate,
+      term_months: termMonths,
+      monthly_payment: Math.round(monthlyPayment),
+      ltv_percent: inv.ltv_percent,
+      collateral_location: inv.property_identifier,
+      bank_name: null,
+      is_forecast: false,
+    }).select("id").single();
+
+    if (loanError) {
+      toast({ title: "Chyba", description: "Nepodařilo se vytvořit úvěr", variant: "destructive" });
+      return;
+    }
+
+    // 3. Link property to loan
+    if (newProperty?.id && newLoan?.id) {
+      await supabase.from("properties").update({ loan_id: newLoan.id }).eq("id", newProperty.id);
+    }
+
+    // 4. Delete planned investment
+    await supabase.from("planned_investments").delete().eq("id", id);
+
+    toast({
+      title: "Realizováno!",
+      description: `Nemovitost "${inv.property_identifier}" a úvěr byly přidány do portfolia.`,
+    });
+
+    setRealizingId(null);
+    fetchInvestments();
   };
 
   // Calculate derived values for display
@@ -141,7 +208,16 @@ export default function PlanningTab({ userId: viewUserId }: { userId?: string | 
                     <TableCell className="text-right font-semibold text-primary">{formatNumber(calc.netAnnualProfit)}</TableCell>
                     {!readOnly && (
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Realizovat"
+                          onClick={() => setRealizingId(inv.id)}
+                          className="text-green-600 hover:text-green-700"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -189,6 +265,23 @@ export default function PlanningTab({ userId: viewUserId }: { userId?: string | 
             <AlertDialogCancel>Zrušit</AlertDialogCancel>
             <AlertDialogAction onClick={() => deletingId && handleDelete(deletingId)}>
               Smazat
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!realizingId} onOpenChange={() => setRealizingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Realizovat plánovanou investici?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tím se vytvoří skutečná nemovitost a úvěr ve vašem portfoliu a plánovaná investice bude smazána.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Zrušit</AlertDialogCancel>
+            <AlertDialogAction onClick={() => realizingId && handleRealize(realizingId)} className="bg-green-600 hover:bg-green-700">
+              Realizovat
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

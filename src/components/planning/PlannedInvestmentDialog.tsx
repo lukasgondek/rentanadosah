@@ -6,21 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { z } from "zod";
+import { formatNumber as fmtNum, calculateAnnuity } from "@/lib/utils";
 
-const plannedInvestmentSchema = z.object({
-  property_identifier: z.string().trim().min(1, "Identifikátor nemovitosti je povinný"),
-  purchase_price: z.number().min(0, "Kupní cena nemůže být záporná"),
-  estimated_value: z.number().min(0, "Odhadní cena nemůže být záporná"),
-  monthly_rent: z.number().min(0, "Nájem nemůže být záporný"),
-  monthly_expenses: z.number().min(0, "Výdaje nemohou být záporné"),
-  appreciation_percent: z.number().min(0).max(100),
-  rent_growth_percent: z.number().min(0).max(100),
-  loan_amount: z.number().min(0, "Výše úvěru nemůže být záporná"),
-  interest_rate: z.number().min(0).max(100, "Úroková sazba musí být mezi 0-100%"),
-  ltv_percent: z.number().min(0).max(100, "LTV musí být mezi 0-100%"),
-  term_months: z.number().min(1, "Doba splatnosti musí být alespoň 1 rok"),
-});
+/** Safely parse a numeric input value — returns undefined for empty/NaN */
+const parseNum = (val: string): number | undefined => {
+  if (!val || val.trim() === "") return undefined;
+  const num = parseFloat(val);
+  return isNaN(num) ? undefined : num;
+};
 
 interface PlannedInvestmentDialogProps {
   onSuccess: () => void;
@@ -30,7 +23,7 @@ interface PlannedInvestmentDialogProps {
 export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestmentDialogProps) => {
   const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
-  
+
   const [formData, setFormData] = useState({
     property_identifier: editData?.property_identifier || "",
     purchase_price: editData?.purchase_price?.toString() || "",
@@ -45,6 +38,8 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
     term_months: editData ? Math.round(editData.term_months / 12).toString() : "",
   });
 
+  const [currentDashboardCashflow, setCurrentDashboardCashflow] = useState(0);
+
   const [calculations, setCalculations] = useState({
     cashflow: 0,
     monthly_payment: 0,
@@ -57,6 +52,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
     net_profit_10_years: 0,
     current_cashflow_impact: 0,
     cashflow_after_transaction: 0,
+    cash_remaining: 0,
   });
 
   useEffect(() => {
@@ -64,6 +60,28 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
       setOpen(true);
     }
   }, [editData]);
+
+  // Fetch actual current cashflow from DB
+  useEffect(() => {
+    const fetchCashflow = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Parallel fetch income, expenses, loans
+      const [incomeRes, expensesRes, loansRes] = await Promise.all([
+        supabase.from("income_sources").select("monthly_amount").eq("user_id", user.id),
+        supabase.from("expenses").select("amount").eq("user_id", user.id),
+        supabase.from("loans").select("monthly_payment").eq("user_id", user.id).eq("is_forecast", false),
+      ]);
+
+      const totalIncome = (incomeRes.data || []).reduce((sum, i) => sum + (i.monthly_amount || 0), 0);
+      const totalExpenses = (expensesRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
+      const totalLoanPayments = (loansRes.data || []).reduce((sum, l) => sum + (l.monthly_payment || 0), 0);
+
+      setCurrentDashboardCashflow(totalIncome - totalExpenses - totalLoanPayments);
+    };
+    fetchCashflow();
+  }, []);
 
   // Calculate all derived values
   useEffect(() => {
@@ -106,20 +124,20 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
     let currentRent = monthlyRent;
     let currentValue = estimatedValue;
     let remainingPrincipal = loanAmount;
-    
+
     for (let year = 1; year <= 5; year++) {
       // Rent grows each year
       currentRent = currentRent * (1 + rentGrowthPercent / 100);
       const yearCashflow = (currentRent - monthlyExpenses) * 12;
-      
+
       // Interest decreases as principal is paid down (0.14% monthly reduction approximation)
       const yearlyInterest = remainingPrincipal * (interestRate / 100);
       remainingPrincipal = remainingPrincipal * (1 - 0.0014 * 12); // 0.14% monthly reduction
-      
+
       // Property value appreciation
       currentValue = currentValue * (1 + appreciationPercent / 100);
       const yearAppreciation = currentValue * (appreciationPercent / 100);
-      
+
       profit5Years += yearCashflow - yearlyInterest + yearAppreciation;
     }
 
@@ -128,24 +146,25 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
     currentRent = monthlyRent * Math.pow(1 + rentGrowthPercent / 100, 5); // Start from year 6
     currentValue = estimatedValue * Math.pow(1 + appreciationPercent / 100, 5);
     remainingPrincipal = loanAmount * Math.pow(1 - 0.0014 * 12, 5);
-    
+
     for (let year = 6; year <= 10; year++) {
       currentRent = currentRent * (1 + rentGrowthPercent / 100);
       const yearCashflow = (currentRent - monthlyExpenses) * 12;
-      
+
       const yearlyInterest = remainingPrincipal * (interestRate / 100);
       remainingPrincipal = remainingPrincipal * (1 - 0.0014 * 12);
-      
+
       currentValue = currentValue * (1 + appreciationPercent / 100);
       const yearAppreciation = currentValue * (appreciationPercent / 100);
-      
+
       profit10Years += yearCashflow - yearlyInterest + yearAppreciation;
     }
 
-    // TODO: Get current dashboard cashflow - for now using 0
-    const currentDashboardCashflow = 0;
     const currentCashflowImpact = cashflow - monthlyPayment;
     const cashflowAfterTransaction = currentDashboardCashflow + currentCashflowImpact;
+
+    // Cash remaining: when loan > purchase price
+    const cashRemaining = loanAmount > purchasePrice ? loanAmount - purchasePrice : 0;
 
     setCalculations({
       cashflow,
@@ -159,35 +178,33 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
       net_profit_10_years: profit10Years,
       current_cashflow_impact: currentCashflowImpact,
       cashflow_after_transaction: cashflowAfterTransaction,
+      cash_remaining: cashRemaining,
     });
-  }, [formData]);
+  }, [formData, currentDashboardCashflow]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validationData = {
-      property_identifier: formData.property_identifier,
-      purchase_price: parseFloat(formData.purchase_price),
-      estimated_value: parseFloat(formData.estimated_value),
-      monthly_rent: parseFloat(formData.monthly_rent),
-      monthly_expenses: parseFloat(formData.monthly_expenses),
-      appreciation_percent: parseFloat(formData.appreciation_percent),
-      rent_growth_percent: parseFloat(formData.rent_growth_percent),
-      loan_amount: parseFloat(formData.loan_amount),
-      interest_rate: parseFloat(formData.interest_rate),
-      ltv_percent: parseFloat(formData.ltv_percent),
-      term_months: parseInt(formData.term_months),
+    const showError = (msg: string) => {
+      toast({ title: "Chyba validace", description: msg, variant: "destructive" });
     };
 
-    const validationResult = plannedInvestmentSchema.safeParse(validationData);
-    if (!validationResult.success) {
-      toast({
-        title: "Chyba validace",
-        description: validationResult.error.errors[0].message,
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!formData.property_identifier.trim()) { showError("Vyplňte identifikátor nemovitosti"); return; }
+    const purchasePrice = parseNum(formData.purchase_price);
+    const estimatedValue = parseNum(formData.estimated_value);
+    const monthlyRent = parseNum(formData.monthly_rent);
+    const monthlyExpenses = parseNum(formData.monthly_expenses);
+    const loanAmount = parseNum(formData.loan_amount);
+    const interestRate = parseNum(formData.interest_rate);
+    const termYears = parseNum(formData.term_months);
+
+    if (!purchasePrice || purchasePrice <= 0) { showError("Vyplňte kupní cenu"); return; }
+    if (!estimatedValue || estimatedValue <= 0) { showError("Vyplňte odhadní cenu"); return; }
+    if (monthlyRent === undefined || monthlyRent < 0) { showError("Vyplňte měsíční nájem"); return; }
+    if (monthlyExpenses === undefined || monthlyExpenses < 0) { showError("Vyplňte měsíční výdaje"); return; }
+    if (!loanAmount || loanAmount <= 0) { showError("Vyplňte výši úvěru"); return; }
+    if (interestRate === undefined || interestRate < 0) { showError("Vyplňte úrokovou sazbu"); return; }
+    if (!termYears || termYears <= 0) { showError("Vyplňte dobu splatnosti"); return; }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -202,16 +219,16 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
     const dataToSave = {
       user_id: user.id,
       property_identifier: formData.property_identifier.trim(),
-      purchase_price: parseFloat(formData.purchase_price),
-      estimated_value: parseFloat(formData.estimated_value),
-      monthly_rent: parseFloat(formData.monthly_rent),
-      monthly_expenses: parseFloat(formData.monthly_expenses),
-      appreciation_percent: parseFloat(formData.appreciation_percent),
-      rent_growth_percent: parseFloat(formData.rent_growth_percent),
-      loan_amount: parseFloat(formData.loan_amount),
-      interest_rate: parseFloat(formData.interest_rate),
-      ltv_percent: parseFloat(formData.ltv_percent),
-      term_months: parseInt(formData.term_months) * 12,
+      purchase_price: purchasePrice,
+      estimated_value: estimatedValue,
+      monthly_rent: monthlyRent,
+      monthly_expenses: monthlyExpenses,
+      appreciation_percent: parseNum(formData.appreciation_percent) ?? 5,
+      rent_growth_percent: parseNum(formData.rent_growth_percent) ?? 5,
+      loan_amount: loanAmount,
+      interest_rate: interestRate,
+      ltv_percent: parseNum(formData.ltv_percent) ?? null,
+      term_months: termYears * 12,
     };
 
     let error;
@@ -252,9 +269,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
     onSuccess();
   };
 
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 0 }).format(num);
-  };
+  const formatNumber = fmtNum;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -396,14 +411,13 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>LTV (%) *</Label>
+                <Label>LTV (%) <span className="text-muted-foreground font-normal">— nepovinné</span></Label>
                 <Input
                   type="number"
                   step="0.1"
                   value={formData.ltv_percent}
                   onChange={(e) => setFormData({ ...formData, ltv_percent: e.target.value })}
                   placeholder="80"
-                  required
                 />
               </div>
               <div className="space-y-2">
@@ -510,10 +524,30 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
                 <Input
                   value={formatNumber(calculations.cashflow_after_transaction)}
                   disabled
-                  className="bg-background font-semibold"
+                  className={`font-semibold ${calculations.cashflow_after_transaction < 0 ? "bg-red-50 text-red-600" : "bg-background"}`}
                 />
               </div>
             </div>
+
+            {calculations.cashflow_after_transaction < 0 && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                ⚠️ Záporný cashflow po transakci. Vaše hotovostní rezerva vystačí přibližně na{" "}
+                <strong>
+                  {Math.abs(calculations.cashflow_after_transaction) > 0
+                    ? "potřebné krytí"
+                    : "0"
+                  }
+                </strong>
+                {" "}— doporučujeme zvážit vyšší příjem nebo nižší splátku.
+              </div>
+            )}
+
+            {calculations.cash_remaining > 0 && (
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
+                💰 Úvěr je vyšší než kupní cena — v hotovosti zůstane{" "}
+                <strong>{formatNumber(calculations.cash_remaining)} Kč</strong>.
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2">

@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { z } from "zod";
+import { grossToNet } from "@/lib/utils";
 
 type IncomeCategory = "employment" | "self_employed_s7" | "rental_s9" | "business" | "other";
 type OwnerType = "self" | "partner";
@@ -35,17 +35,12 @@ interface IncomeFormData {
   otherFrequency?: OtherFrequency;
 }
 
-const incomeValidationSchema = z.object({
-  name: z.string().trim().max(200, "Název je příliš dlouhý").optional(),
-  grossSalary: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  netSalary: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  incomeAmount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  expensePercentage: z.number().min(0, "Procento nemůže být záporné").max(100, "Procento nemůže být vyšší než 100").optional(),
-  realExpenses: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  businessIncome: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  businessExpenses: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-  otherAmount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká").optional(),
-});
+/** Safely parse a numeric input value — returns undefined for empty/NaN */
+const parseNum = (val: string): number | undefined => {
+  if (!val || val.trim() === "") return undefined;
+  const num = parseFloat(val);
+  return isNaN(num) ? undefined : num;
+};
 
 export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
   const [open, setOpen] = useState(false);
@@ -88,18 +83,46 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate form data
-    const validationResult = incomeValidationSchema.safeParse(formData);
-    if (!validationResult.success) {
-      toast({
-        title: "Chyba validace",
-        description: validationResult.error.errors[0].message,
-        variant: "destructive"
-      });
-      return;
+
+    // Validate required fields based on category
+    const showError = (msg: string) => {
+      toast({ title: "Chyba validace", description: msg, variant: "destructive" });
+    };
+
+    if (formData.category === "employment") {
+      if (!formData.grossSalary && !formData.netSalary) {
+        showError("Vyplňte alespoň hrubou nebo čistou mzdu");
+        return;
+      }
+    } else if (formData.category === "self_employed_s7" || formData.category === "rental_s9") {
+      if (!formData.incomeAmount || formData.incomeAmount <= 0) {
+        showError("Vyplňte roční příjmy");
+        return;
+      }
+      if (formData.expenseType === "flat_rate" && (formData.expensePercentage === undefined || formData.expensePercentage < 0)) {
+        showError("Vyplňte procento paušálních výdajů");
+        return;
+      }
+      if (formData.expenseType === "real" && (!formData.realExpenses || formData.realExpenses < 0)) {
+        showError("Vyplňte reálné výdaje");
+        return;
+      }
+    } else if (formData.category === "business") {
+      if (!formData.businessIncome || formData.businessIncome <= 0) {
+        showError("Vyplňte firemní příjmy");
+        return;
+      }
+      if (formData.businessExpenses === undefined || formData.businessExpenses < 0) {
+        showError("Vyplňte firemní výdaje");
+        return;
+      }
+    } else if (formData.category === "other") {
+      if (!formData.otherAmount || formData.otherAmount <= 0) {
+        showError("Vyplňte částku příjmu");
+        return;
+      }
     }
-    
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast({ title: "Chyba", description: "Musíte být přihlášeni", variant: "destructive" });
@@ -107,39 +130,50 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     }
 
     const taxBase = calculateTaxBase();
-    
+
+    // Calculate monthly/yearly amounts safely
+    let monthlyAmount: number | null = null;
+    let yearlyAmount: number | null = null;
+
+    if (formData.category === "employment" && formData.netSalary) {
+      monthlyAmount = formData.netSalary;
+      yearlyAmount = formData.netSalary * 12;
+    } else if (formData.category === "other" && formData.otherAmount) {
+      if (formData.otherFrequency === "yearly") {
+        monthlyAmount = formData.otherAmount / 12;
+        yearlyAmount = formData.otherAmount;
+      } else {
+        monthlyAmount = formData.otherAmount;
+        yearlyAmount = formData.otherAmount * 12;
+      }
+    } else if ((formData.category === "self_employed_s7" || formData.category === "rental_s9") && taxBase) {
+      monthlyAmount = taxBase / 12;
+      yearlyAmount = taxBase;
+    } else if (formData.category === "business" && taxBase) {
+      monthlyAmount = taxBase / 12;
+      yearlyAmount = taxBase;
+    }
+
     const { error } = await supabase.from("income_sources").insert({
       user_id: user.id,
       category: formData.category,
       owner_type: formData.ownerType,
       name: (formData.name?.trim() || "Bez názvu"),
       type: mapCategoryToType(formData.category),
-      gross_salary: formData.grossSalary,
-      net_salary: formData.netSalary,
-      income_amount: formData.incomeAmount,
+      gross_salary: formData.grossSalary || null,
+      net_salary: formData.netSalary || null,
+      income_amount: formData.incomeAmount || null,
       expense_type: formData.expenseType,
-      expense_percentage: formData.expensePercentage,
-      real_expenses: formData.realExpenses,
+      expense_percentage: formData.expensePercentage ?? null,
+      real_expenses: formData.realExpenses || null,
       tax_base: taxBase,
-      business_income: formData.businessIncome,
-      business_expenses: formData.businessExpenses,
+      business_income: formData.businessIncome || null,
+      business_expenses: formData.businessExpenses ?? null,
       business_tax_base: formData.category === "business" ? taxBase : null,
-      other_amount: formData.otherAmount,
+      other_amount: formData.otherAmount || null,
       other_frequency: formData.otherFrequency,
-      monthly_amount:
-        formData.category === "employment" ? formData.netSalary :
-        formData.category === "self_employed_s7" ? (formData.incomeAmount || 0) / 12 :
-        formData.category === "rental_s9" ? (formData.incomeAmount || 0) / 12 :
-        formData.category === "business" ? ((formData.businessIncome || 0) - (formData.businessExpenses || 0)) / 12 :
-        // "other"
-        formData.otherFrequency === "yearly" && formData.otherAmount ? formData.otherAmount / 12 : formData.otherAmount,
-      yearly_amount:
-        formData.category === "employment" ? (formData.netSalary || 0) * 12 :
-        formData.category === "self_employed_s7" ? (formData.incomeAmount || 0) :
-        formData.category === "rental_s9" ? (formData.incomeAmount || 0) :
-        formData.category === "business" ? ((formData.businessIncome || 0) - (formData.businessExpenses || 0)) :
-        // "other"
-        formData.otherFrequency === "monthly" ? (formData.otherAmount || 0) * 12 : formData.otherAmount,
+      monthly_amount: monthlyAmount,
+      yearly_amount: yearlyAmount,
     });
 
     if (error) {
@@ -214,27 +248,40 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
           </div>
 
           {formData.category === "employment" && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Hrubá mzda (Kč/měsíc)</Label>
-                <Input
-                  type="number"
-                  value={formData.grossSalary || ""}
-                  onChange={(e) => setFormData({ ...formData, grossSalary: parseFloat(e.target.value) })}
-                  placeholder="50000"
-                  required
-                />
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Hrubá mzda (Kč/měsíc)</Label>
+                  <Input
+                    type="number"
+                    value={formData.grossSalary || ""}
+                    onChange={(e) => {
+                      const gross = parseNum(e.target.value);
+                      const updates: Partial<IncomeFormData> = { grossSalary: gross };
+                      // Auto-calculate net salary
+                      if (gross && gross > 0) {
+                        updates.netSalary = grossToNet(gross);
+                      }
+                      setFormData({ ...formData, ...updates });
+                    }}
+                    placeholder="50000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Čistá mzda (Kč/měsíc)</Label>
+                  <Input
+                    type="number"
+                    value={formData.netSalary || ""}
+                    onChange={(e) => setFormData({ ...formData, netSalary: parseNum(e.target.value) })}
+                    placeholder="37500"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Čistá mzda (Kč/měsíc)</Label>
-                <Input
-                  type="number"
-                  value={formData.netSalary || ""}
-                  onChange={(e) => setFormData({ ...formData, netSalary: parseFloat(e.target.value) })}
-                  placeholder="37500"
-                  required
-                />
-              </div>
+              {formData.grossSalary && formData.grossSalary > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Orientační výpočet čisté mzdy (bez slev na děti, invalidity apod.). Můžete přepsat ručně.
+                </p>
+              )}
             </div>
           )}
 
@@ -245,7 +292,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                 <Input
                   type="number"
                   value={formData.incomeAmount || ""}
-                  onChange={(e) => setFormData({ ...formData, incomeAmount: parseFloat(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, incomeAmount: parseNum(e.target.value) })}
                   placeholder="100000"
                   required
                 />
@@ -271,7 +318,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                   <Input
                     type="number"
                     value={formData.expensePercentage || ""}
-                    onChange={(e) => setFormData({ ...formData, expensePercentage: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, expensePercentage: parseNum(e.target.value) })}
                     placeholder="60"
                     max="100"
                     required
@@ -290,7 +337,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                   <Input
                     type="number"
                     value={formData.realExpenses || ""}
-                    onChange={(e) => setFormData({ ...formData, realExpenses: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, realExpenses: parseNum(e.target.value) })}
                     placeholder="36000"
                     required
                   />
@@ -311,7 +358,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                 <Input
                   type="number"
                   value={formData.businessIncome || ""}
-                  onChange={(e) => setFormData({ ...formData, businessIncome: parseFloat(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, businessIncome: parseNum(e.target.value) })}
                   placeholder="500000"
                   required
                 />
@@ -321,7 +368,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                 <Input
                   type="number"
                   value={formData.businessExpenses || ""}
-                  onChange={(e) => setFormData({ ...formData, businessExpenses: parseFloat(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, businessExpenses: parseNum(e.target.value) })}
                   placeholder="300000"
                   required
                 />
@@ -341,7 +388,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                 <Input
                   type="number"
                   value={formData.otherAmount || ""}
-                  onChange={(e) => setFormData({ ...formData, otherAmount: parseFloat(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, otherAmount: parseNum(e.target.value) })}
                   placeholder="10000"
                   required
                 />

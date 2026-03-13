@@ -7,15 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { z } from "zod";
 import { Checkbox } from "@/components/ui/checkbox";
-
-const investmentValidationSchema = z.object({
-  name: z.string().trim().max(200, "Název je příliš dlouhý").optional(),
-  amount: z.number().min(0, "Částka nemůže být záporná").max(999999999, "Částka je příliš vysoká"),
-  yearly_return_percent: z.number().min(-100, "Procento nemůže být nižší než -100").max(1000, "Procento je příliš vysoké").optional(),
-  liquidity_months: z.number().min(0, "Doba likvidace nemůže být záporná").max(1200, "Doba likvidace je příliš dlouhá").optional(),
-});
 
 interface InvestmentDialogProps {
   onSuccess: () => void;
@@ -37,24 +29,15 @@ export const InvestmentDialog = ({ onSuccess, editData }: InvestmentDialogProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    try {
-      const validationData = {
-        name: formData.name || undefined,
-        amount: parseFloat(formData.amount),
-        yearly_return_percent: formData.yearly_return_percent ? parseFloat(formData.yearly_return_percent) : undefined,
-        liquidity_months: formData.liquidity_months ? parseInt(formData.liquidity_months) : undefined,
-      };
-
-      investmentValidationSchema.parse(validationData);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast({
-          title: "Chyba validace",
-          description: error.errors[0].message,
-          variant: "destructive",
-        });
-        return;
-      }
+    // Validate amount
+    const amount = parseFloat(formData.amount);
+    if (!formData.amount || isNaN(amount) || amount < 0) {
+      toast({
+        title: "Chyba validace",
+        description: "Vyplňte částku investice",
+        variant: "destructive",
+      });
+      return;
     }
 
     const { data: { user } } = await supabase.auth.getUser();

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 interface IncomeSource {
   id: string;
@@ -64,36 +65,36 @@ export const IncomeTable = ({
       case "employment":
         return (
           <>
-            <div>Hrubá: {income.gross_salary?.toLocaleString("cs-CZ")} Kč</div>
-            <div>Čistá: {income.net_salary?.toLocaleString("cs-CZ")} Kč</div>
+            <div>Hrubá: {income.gross_salary ? formatCurrency(income.gross_salary) : "-"}</div>
+            <div>Čistá: {income.net_salary ? formatCurrency(income.net_salary) : "-"}</div>
           </>
         );
       case "self_employed_s7":
       case "rental_s9":
         return (
           <>
-            <div>Příjmy: {income.income_amount?.toLocaleString("cs-CZ")} Kč</div>
+            <div>Příjmy: {income.income_amount ? formatCurrency(income.income_amount) : "-"}</div>
             {income.expense_type === "flat_rate" && (
               <div>Výdaje: {income.expense_percentage}%</div>
             )}
             {income.expense_type === "real" && (
-              <div>Výdaje: {income.real_expenses?.toLocaleString("cs-CZ")} Kč</div>
+              <div>Výdaje: {income.real_expenses ? formatCurrency(income.real_expenses) : "-"}</div>
             )}
-            <div className="font-semibold">Daň. základ: {income.tax_base?.toLocaleString("cs-CZ")} Kč</div>
+            <div className="font-semibold">Daň. základ: {income.tax_base ? formatCurrency(income.tax_base) : "-"}</div>
           </>
         );
       case "business":
         return (
           <>
-            <div>Příjmy: {income.business_income?.toLocaleString("cs-CZ")} Kč</div>
-            <div>Výdaje: {income.business_expenses?.toLocaleString("cs-CZ")} Kč</div>
-            <div className="font-semibold">Daň. základ: {income.business_tax_base?.toLocaleString("cs-CZ")} Kč</div>
+            <div>Příjmy: {income.business_income ? formatCurrency(income.business_income) : "-"}</div>
+            <div>Výdaje: {income.business_expenses !== undefined ? formatCurrency(income.business_expenses) : "-"}</div>
+            <div className="font-semibold">Daň. základ: {income.business_tax_base ? formatCurrency(income.business_tax_base) : "-"}</div>
           </>
         );
       case "other":
         return (
           <div>
-            {income.other_amount?.toLocaleString("cs-CZ")} Kč ({income.other_frequency === "monthly" ? "měsíčně" : "ročně"})
+            {income.other_amount ? formatCurrency(income.other_amount) : "-"} ({income.other_frequency === "monthly" ? "měsíčně" : "ročně"})
           </div>
         );
       default:

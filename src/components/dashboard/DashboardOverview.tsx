@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendingUp, TrendingDown, Wallet, DollarSign } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency, formatNumber, calculateAnnuity } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -8,13 +9,12 @@ import { useToast } from "@/hooks/use-toast";
 interface MetricCardProps {
   title: string;
   value: string;
-  change?: number;
   description?: string;
   icon: React.ElementType;
-  trend?: "up" | "down";
+  trend?: "up" | "down" | "neutral";
 }
 
-const MetricCard = ({ title, value, change, description, icon: Icon, trend }: MetricCardProps) => {
+const MetricCard = ({ title, value, description, icon: Icon, trend }: MetricCardProps) => {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -24,16 +24,10 @@ const MetricCard = ({ title, value, change, description, icon: Icon, trend }: Me
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {change !== undefined && (
-          <p className={cn(
-            "text-xs flex items-center gap-1 mt-1",
-            trend === "up" ? "text-success" : "text-destructive"
-          )}>
-            {trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {change > 0 ? "+" : ""}{change.toFixed(1)}%
-          </p>
-        )}
+        <div className={cn(
+          "text-2xl font-bold",
+          trend === "down" && "text-destructive"
+        )}>{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground mt-1">{description}</p>
         )}
@@ -41,9 +35,6 @@ const MetricCard = ({ title, value, change, description, icon: Icon, trend }: Me
     </Card>
   );
 };
-
-const formatCzk = (amount: number) =>
-  new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(amount);
 
 const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = {}) => {
   const [incomeSummary, setIncomeSummary] = useState({
@@ -59,9 +50,13 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
     irregular: 0,
     total: 0,
   });
-  const [netWorth, setNetWorth] = useState(0);
-  const [monthlyLoanPayments, setMonthlyLoanPayments] = useState(0);
-  const [monthlyCashflow, setMonthlyCashflow] = useState(0);
+  const [loanPayments, setLoanPayments] = useState(0);
+  const [netWorth, setNetWorth] = useState({
+    current: 0,
+    fiveYear: 0,
+    tenYear: 0,
+  });
+  const [forecastSteps, setForecastSteps] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -70,93 +65,139 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
       if (!user) return;
       const targetUserId = viewUserId || user.id;
 
-      // 1. Income sources
-      const { data: incomeData, error: incomeError } = await supabase
-        .from("income_sources")
-        .select("type, monthly_amount")
-        .eq("user_id", targetUserId);
+      // Fetch all data in parallel
+      const [incomeRes, expenseRes, loanRes, propertyRes, investmentRes, plannedRes] = await Promise.all([
+        supabase.from("income_sources").select("*").eq("user_id", targetUserId),
+        supabase.from("expenses").select("*").eq("user_id", targetUserId),
+        supabase.from("loans").select("*").eq("user_id", targetUserId).eq("is_forecast", false),
+        supabase.from("properties").select("*").eq("user_id", targetUserId).eq("is_forecast", false),
+        supabase.from("investments").select("*").eq("user_id", targetUserId).eq("is_forecast", false),
+        supabase.from("planned_investments").select("*").eq("user_id", targetUserId).order("created_at", { ascending: true }),
+      ]);
 
-      if (incomeError) {
-        toast({ title: "Chyba", description: "Nepodařilo se načíst příjmy", variant: "destructive" });
+      if (incomeRes.error || expenseRes.error || loanRes.error || propertyRes.error || investmentRes.error) {
+        toast({
+          title: "Chyba",
+          description: "Nepodařilo se načíst data pro dashboard",
+          variant: "destructive",
+        });
         return;
       }
 
-      const income = incomeData || [];
-      const employment = income.filter(i => i.type === "salary").reduce((s, i) => s + (i.monthly_amount || 0), 0);
-      const selfEmployed = income.filter(i => i.type === "self_employed").reduce((s, i) => s + (i.monthly_amount || 0), 0);
-      const rental = income.filter(i => i.type === "rental").reduce((s, i) => s + (i.monthly_amount || 0), 0);
-      const business = income.filter(i => i.type === "business").reduce((s, i) => s + (i.monthly_amount || 0), 0);
-      const other = income.filter(i => i.type === "other").reduce((s, i) => s + (i.monthly_amount || 0), 0);
+      const incomeData = incomeRes.data || [];
+      const expenseData = expenseRes.data || [];
+      const loanData = loanRes.data || [];
+      const propertyData = propertyRes.data || [];
+      const investmentData = investmentRes.data || [];
+
+      // ── Income ──
+      const employment = incomeData
+        .filter(item => item.type === "salary")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+      const selfEmployed = incomeData
+        .filter(item => item.type === "self_employed")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+      const rental = incomeData
+        .filter(item => item.type === "rental")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+      const business = incomeData
+        .filter(item => item.type === "business")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
+      const other = incomeData
+        .filter(item => item.type === "other")
+        .reduce((sum, item) => sum + (item.monthly_amount || 0), 0);
       const totalIncome = employment + selfEmployed + rental + business + other;
 
       setIncomeSummary({ employment, selfEmployed, rental, business, other, total: totalIncome });
 
-      // 2. Expenses
-      const { data: expenseData } = await supabase
-        .from("expenses")
-        .select("amount, is_recurring, frequency")
-        .eq("user_id", targetUserId);
+      // ── Expenses ──
+      const toMonthly = (e: { amount?: number | null; frequency?: string | null; is_recurring?: boolean | null; monthly_amount?: number | null; yearly_amount?: number | null }) => {
+        if (e.monthly_amount) return e.monthly_amount;
+        if (e.yearly_amount) return e.yearly_amount / 12;
+        if (e.frequency === "yearly") return (e.amount || 0) / 12;
+        return e.amount || 0;
+      };
+      const regularExpenses = expenseData
+        .filter(item => item.is_recurring || item.is_regular)
+        .reduce((sum, item) => sum + toMonthly(item), 0);
+      const irregularExpenses = expenseData
+        .filter(item => !item.is_recurring && !item.is_regular)
+        .reduce((sum, item) => sum + toMonthly(item), 0);
+      const totalExpenses = regularExpenses + irregularExpenses;
 
-      const expenses = expenseData || [];
-      const toMonthly = (e: { amount: number; frequency?: string | null }) =>
-        e.frequency === "yearly" ? (e.amount || 0) / 12 : (e.amount || 0);
-      const regular = expenses.filter(e => e.is_recurring).reduce((s, e) => s + toMonthly(e), 0);
-      const irregular = expenses.filter(e => !e.is_recurring).reduce((s, e) => s + toMonthly(e), 0);
-      setExpenseSummary({ regular, irregular, total: regular + irregular });
+      setExpenseSummary({ regular: regularExpenses, irregular: irregularExpenses, total: totalExpenses });
 
-      // 3. Loans — monthly payments + remaining principal
-      const { data: loanData } = await supabase
-        .from("loans")
-        .select("monthly_payment, remaining_principal")
-        .eq("user_id", targetUserId)
-        .not("is_forecast", "eq", true);
+      // ── Loan payments ──
+      const totalLoanPayments = loanData.reduce((sum, loan) => sum + (loan.monthly_payment || 0), 0);
+      setLoanPayments(totalLoanPayments);
 
-      const loans = loanData || [];
-      const totalLoanPayments = loans.reduce((s, l) => s + (l.monthly_payment || 0), 0);
-      const totalLoanDebt = loans.reduce((s, l) => s + (l.remaining_principal || 0), 0);
-      setMonthlyLoanPayments(totalLoanPayments);
+      // ── Net Worth ──
+      const propertyValue = propertyData.reduce((sum, p) => sum + (p.estimated_value || 0), 0);
+      const investmentValue = investmentData.reduce((sum, i) => sum + (i.amount || 0), 0);
+      const totalDebt = loanData.reduce((sum, l) => sum + (l.remaining_principal || 0), 0);
+      const currentNetWorth = propertyValue + investmentValue - totalDebt;
 
-      // 4. Investments — current value
-      const { data: investmentData } = await supabase
-        .from("investments")
-        .select("amount, yearly_return_percent")
-        .eq("user_id", targetUserId)
-        .not("is_forecast", "eq", true);
+      // 5/10 year projections
+      const avgAppreciation = propertyData.length > 0
+        ? propertyData.reduce((sum, p) => sum + (p.yearly_appreciation_percent || 3), 0) / propertyData.length
+        : 3;
+      const avgInvestReturn = investmentData.length > 0
+        ? investmentData.reduce((sum, i) => sum + (i.yearly_return_percent || 0), 0) / investmentData.length
+        : 0;
 
-      const investments = investmentData || [];
-      const totalInvestments = investments.reduce((s, i) => s + (i.amount || 0), 0);
+      // Simple compound projection
+      const property5yr = propertyValue * Math.pow(1 + avgAppreciation / 100, 5);
+      const invest5yr = investmentValue * Math.pow(1 + avgInvestReturn / 100, 5);
+      // Approximate remaining debt after 5 years of payments
+      const monthlyPrincipal = totalLoanPayments > 0 ? totalLoanPayments * 0.4 : 0; // rough estimate: ~40% of payment goes to principal
+      const debt5yr = Math.max(0, totalDebt - monthlyPrincipal * 60);
+      const fiveYearNetWorth = property5yr + invest5yr - debt5yr;
 
-      // 5. Properties — estimated value + monthly cashflow
-      const { data: propertyData } = await supabase
-        .from("properties")
-        .select("estimated_value, monthly_rent, monthly_expenses")
-        .eq("user_id", targetUserId)
-        .not("is_forecast", "eq", true);
+      const property10yr = propertyValue * Math.pow(1 + avgAppreciation / 100, 10);
+      const invest10yr = investmentValue * Math.pow(1 + avgInvestReturn / 100, 10);
+      const debt10yr = Math.max(0, totalDebt - monthlyPrincipal * 120);
+      const tenYearNetWorth = property10yr + invest10yr - debt10yr;
 
-      const properties = propertyData || [];
-      const totalPropertyValue = properties.reduce((s, p) => s + (p.estimated_value || 0), 0);
-      const netPropertyIncome = properties.reduce(
-        (s, p) => s + (p.monthly_rent || 0) - (p.monthly_expenses || 0), 0
-      );
+      setNetWorth({ current: currentNetWorth, fiveYear: fiveYearNetWorth, tenYear: tenYearNetWorth });
 
-      // Net Worth = investments + property values - loan debts
-      const calculatedNetWorth = totalInvestments + totalPropertyValue - totalLoanDebt;
-      setNetWorth(calculatedNetWorth);
+      // ── Forecast: chain planned investments ──
+      const plannedData = plannedRes.data || [];
+      if (plannedData.length > 0) {
+        let runningCashflow = totalIncome - totalExpenses - totalLoanPayments;
+        let runningPropertyValue = propertyValue;
+        let runningDebt = totalDebt;
+        let runningInvestmentValue = investmentValue;
 
-      // Monthly Cashflow = income + net property income - loan payments - personal expenses
-      const cashflow = totalIncome + netPropertyIncome - totalLoanPayments - (regular + irregular);
-      setMonthlyCashflow(cashflow);
+        const steps = plannedData.map((plan: any, index: number) => {
+          const planMonthlyPayment = calculateAnnuity(plan.loan_amount || 0, plan.interest_rate || 0, plan.term_months || 300);
+          const planCashflow = (plan.monthly_rent || 0) - (plan.monthly_expenses || 0);
+          const cashflowImpact = planCashflow - planMonthlyPayment;
+
+          runningCashflow += cashflowImpact;
+          runningPropertyValue += (plan.estimated_value || 0);
+          runningDebt += (plan.loan_amount || 0);
+
+          const runningNetWorth = runningPropertyValue + runningInvestmentValue - runningDebt;
+
+          return {
+            step: index + 1,
+            name: plan.property_identifier,
+            cashflowImpact: Math.round(cashflowImpact),
+            totalCashflow: Math.round(runningCashflow),
+            netWorth: Math.round(runningNetWorth),
+            newDebt: plan.loan_amount || 0,
+            propertyValue: plan.estimated_value || 0,
+          };
+        });
+
+        setForecastSteps(steps);
+      }
     };
 
     fetchAllData();
   }, [viewUserId]);
 
-  const netWorth5yr = netWorth + monthlyCashflow * 60;
-  const netWorth10yr = netWorth + monthlyCashflow * 120;
-
-  const cashflowTrend = monthlyCashflow >= 0 ? "up" : "down";
-  const nw5yrChange = netWorth > 0 ? ((netWorth5yr - netWorth) / netWorth) * 100 : 0;
-  const nw10yrChange = netWorth > 0 ? ((netWorth10yr - netWorth) / netWorth) * 100 : 0;
+  const monthlyCashflow = incomeSummary.total - expenseSummary.total - loanPayments;
 
   return (
     <div className="space-y-6">
@@ -170,31 +211,29 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Měsíční cashflow"
-          value={formatCzk(monthlyCashflow)}
-          trend={cashflowTrend}
+          value={formatCurrency(monthlyCashflow)}
+          trend={monthlyCashflow >= 0 ? "up" : "down"}
           description="Příjmy − výdaje − splátky"
           icon={Wallet}
         />
         <MetricCard
           title="Celkový majetek (Net Worth)"
-          value={formatCzk(netWorth)}
-          description="Investice + nemovitosti − dluhy"
+          value={formatCurrency(netWorth.current)}
+          description="Nemovitosti + investice − dluhy"
           icon={DollarSign}
         />
         <MetricCard
           title="Net Worth za 5 let"
-          value={formatCzk(netWorth5yr)}
-          change={nw5yrChange}
-          trend={netWorth5yr >= netWorth ? "up" : "down"}
-          description="Odhad při aktuálním cashflow"
+          value={formatCurrency(netWorth.fiveYear)}
+          trend="up"
+          description="Odhadovaná hodnota"
           icon={TrendingUp}
         />
         <MetricCard
           title="Net Worth za 10 let"
-          value={formatCzk(netWorth10yr)}
-          change={nw10yrChange}
-          trend={netWorth10yr >= netWorth ? "up" : "down"}
-          description="Odhad při aktuálním cashflow"
+          value={formatCurrency(netWorth.tenYear)}
+          trend="up"
+          description="Odhadovaná hodnota"
           icon={TrendingUp}
         />
       </div>
@@ -209,29 +248,29 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm">Zaměstnanecký</span>
-                <span className="font-medium">{formatCzk(incomeSummary.employment)}</span>
+                <span className="font-medium">{formatCurrency(incomeSummary.employment)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm">OSVČ</span>
-                <span className="font-medium">{formatCzk(incomeSummary.selfEmployed)}</span>
+                <span className="font-medium">{formatCurrency(incomeSummary.selfEmployed)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm">Realitní</span>
-                <span className="font-medium">{formatCzk(incomeSummary.rental)}</span>
+                <span className="font-medium">{formatCurrency(incomeSummary.rental)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm">Firemní</span>
-                <span className="font-medium">{formatCzk(incomeSummary.business)}</span>
+                <span className="font-medium">{formatCurrency(incomeSummary.business)}</span>
               </div>
               {incomeSummary.other > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm">Ostatní</span>
-                  <span className="font-medium">{formatCzk(incomeSummary.other)}</span>
+                  <span className="font-medium">{formatCurrency(incomeSummary.other)}</span>
                 </div>
               )}
               <div className="flex items-center justify-between border-t pt-3">
                 <span className="font-medium">Celkem měsíčně</span>
-                <span className="font-bold">{formatCzk(incomeSummary.total)}</span>
+                <span className="font-bold">{formatCurrency(incomeSummary.total)}</span>
               </div>
             </div>
           </CardContent>
@@ -246,26 +285,86 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm">Pravidelné výdaje</span>
-                <span className="font-medium">{formatCzk(expenseSummary.regular)}</span>
+                <span className="font-medium">{formatCurrency(expenseSummary.regular)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm">Nepravidelné výdaje</span>
-                <span className="font-medium">{formatCzk(expenseSummary.irregular)}</span>
+                <span className="font-medium">{formatCurrency(expenseSummary.irregular)}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Splátky úvěrů</span>
-                <span className="font-medium">{formatCzk(monthlyLoanPayments)}</span>
-              </div>
+              {loanPayments > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Splátky úvěrů</span>
+                  <span className="font-medium">{formatCurrency(loanPayments)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t pt-3">
                 <span className="font-medium">Celkem měsíčně</span>
-                <span className="font-bold">{formatCzk(expenseSummary.total + monthlyLoanPayments)}</span>
+                <span className="font-bold">{formatCurrency(expenseSummary.total + loanPayments)}</span>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {incomeSummary.total === 0 && netWorth === 0 && (
+      {forecastSteps.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Prognóza po realizaci plánů</CardTitle>
+            <CardDescription>
+              Jak se změní vaše portfolio po každém plánovaném kroku
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Krok</TableHead>
+                  <TableHead>Nemovitost</TableHead>
+                  <TableHead className="text-right">Dopad na cashflow</TableHead>
+                  <TableHead className="text-right">Celkový cashflow</TableHead>
+                  <TableHead className="text-right">Celkový majetek</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow className="bg-muted/30">
+                  <TableCell className="font-medium">Aktuálně</TableCell>
+                  <TableCell>—</TableCell>
+                  <TableCell className="text-right">—</TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {formatCurrency(incomeSummary.total - expenseSummary.total - loanPayments)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {formatCurrency(netWorth.current)}
+                  </TableCell>
+                </TableRow>
+                {forecastSteps.map((step) => (
+                  <TableRow key={step.step}>
+                    <TableCell className="font-medium">Krok {step.step}</TableCell>
+                    <TableCell>{step.name}</TableCell>
+                    <TableCell className={cn(
+                      "text-right",
+                      step.cashflowImpact < 0 ? "text-destructive" : "text-green-600"
+                    )}>
+                      {step.cashflowImpact >= 0 ? "+" : ""}{formatCurrency(step.cashflowImpact)}
+                    </TableCell>
+                    <TableCell className={cn(
+                      "text-right font-semibold",
+                      step.totalCashflow < 0 && "text-destructive"
+                    )}>
+                      {formatCurrency(step.totalCashflow)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatCurrency(step.netWorth)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {incomeSummary.total === 0 && netWorth.current === 0 && (
         <Card className="bg-gradient-to-br from-primary/5 to-accent/5">
           <CardHeader>
             <CardTitle>Začněte vyplňovat své údaje</CardTitle>

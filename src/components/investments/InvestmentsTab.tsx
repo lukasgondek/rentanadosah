@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatNumber as fmtNumber } from "@/lib/utils";
 
 const investmentTypeLabels: Record<string, string> = {
   cash: "Hotovost",
@@ -70,8 +71,8 @@ export default function InvestmentsTab({ userId: viewUserId }: { userId?: string
   };
 
   const formatNumber = (num: number | null) => {
-    if (num === null) return "-";
-    return new Intl.NumberFormat("cs-CZ").format(num);
+    if (num === null || num === undefined) return "-";
+    return fmtNumber(num);
   };
 
   return (
