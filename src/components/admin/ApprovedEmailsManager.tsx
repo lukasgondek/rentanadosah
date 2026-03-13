@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { z } from "zod";
@@ -113,6 +113,47 @@ export const ApprovedEmailsManager = () => {
       });
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleRoleChange = async (id: string, newRole: AppRole) => {
+    try {
+      // Update approved_emails role
+      const { error } = await supabase
+        .from("approved_emails")
+        .update({ role: newRole })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      // Try to update user_roles if user already registered
+      const email = emails.find((e) => e.id === id)?.email;
+      if (email) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
+
+        if (profile) {
+          await supabase
+            .from("user_roles")
+            .update({ role: newRole })
+            .eq("user_id", profile.id);
+        }
+      }
+
+      toast({
+        title: "Role změněna",
+        description: `Role nastavena na ${newRole === "prospect" ? "Zájemce" : "Klient"}`,
+      });
+      fetchEmails();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Chyba",
+        description: "Nepodařilo se změnit roli.",
+      });
     }
   };
 
@@ -232,9 +273,18 @@ export const ApprovedEmailsManager = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{item.email}</p>
-                      <Badge variant={item.role === "prospect" ? "secondary" : "default"} className="text-xs">
-                        {item.role === "prospect" ? "Zájemce" : "Klient"}
-                      </Badge>
+                      <Select
+                        value={item.role}
+                        onValueChange={(v) => handleRoleChange(item.id, v as AppRole)}
+                      >
+                        <SelectTrigger className="h-6 w-[120px] text-xs px-2">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">Klient</SelectItem>
+                          <SelectItem value="prospect">Zájemce</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     {item.notes && (
                       <p className="text-sm text-muted-foreground">{item.notes}</p>

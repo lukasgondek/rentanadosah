@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Checkbox } from "@/components/ui/checkbox";
+
 
 /** Safely parse a numeric input value — returns undefined for empty/NaN */
 const parseNum = (val: string): number | undefined => {
@@ -32,7 +32,6 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
     monthly_rent: editData?.monthly_rent?.toString() || "",
     monthly_expenses: editData?.monthly_expenses?.toString() || "",
     yearly_appreciation_percent: editData?.yearly_appreciation_percent?.toString() || "",
-    is_forecast: editData?.is_forecast || false,
     loan_id: editData?.loan_id || "",
   });
 
@@ -79,7 +78,7 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
       monthly_rent: parseNum(formData.monthly_rent) ?? null,
       monthly_expenses: parseNum(formData.monthly_expenses) ?? null,
       yearly_appreciation_percent: parseNum(formData.yearly_appreciation_percent) ?? null,
-      is_forecast: formData.is_forecast,
+      is_forecast: false,
       loan_id: formData.loan_id || null,
     };
 
@@ -111,7 +110,6 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
       monthly_rent: "",
       monthly_expenses: "",
       yearly_appreciation_percent: "",
-      is_forecast: false,
       loan_id: "",
     });
     setOpen(false);
@@ -224,17 +222,6 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
               </Select>
             </div>
           )}
-
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="is_forecast"
-              checked={formData.is_forecast}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_forecast: checked as boolean })}
-            />
-            <Label htmlFor="is_forecast" className="text-sm font-normal cursor-pointer">
-              Jedná se o plánovanou nemovitost
-            </Label>
-          </div>
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

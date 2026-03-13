@@ -7,16 +7,16 @@ export function cn(...inputs: ClassValue[]) {
 
 // ─── Number formatting ───────────────────────────────────────────────
 
-/** Format number with Czech separators: 1 200 000 */
+/** Format number with dot separators: 1.200.000 */
 export function formatNumber(num: number, decimals = 0): string {
   if (isNaN(num)) return "0";
-  return new Intl.NumberFormat("cs-CZ", {
+  return new Intl.NumberFormat("de-DE", {
     maximumFractionDigits: decimals,
     minimumFractionDigits: 0,
   }).format(num);
 }
 
-/** Format number as Czech currency: 1 200 000 Kč */
+/** Format number as Czech currency: 1.200.000 Kč */
 export function formatCurrency(num: number): string {
   if (isNaN(num)) return "0 Kč";
   return `${formatNumber(num)} Kč`;

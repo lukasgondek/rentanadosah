@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 interface Expense {
   id: string;
@@ -63,7 +64,7 @@ export const ExpenseTable = ({
           <TableRow key={expense.id}>
             <TableCell className="font-medium">{expense.name}</TableCell>
             <TableCell>
-              {expense.amount.toLocaleString("cs-CZ")} Kč
+              {formatCurrency(expense.amount)}
               {expense.frequency === "yearly" && (
                 <span className="text-xs text-muted-foreground ml-1">/rok</span>
               )}
@@ -72,7 +73,7 @@ export const ExpenseTable = ({
               )}
             </TableCell>
             <TableCell>
-              {getMonthlyAmount(expense).toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+              {formatCurrency(getMonthlyAmount(expense))}
             </TableCell>
             <TableCell>
               {expense.is_recurring ? (
