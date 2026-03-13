@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 type Frequency = "monthly" | "yearly";
 
@@ -122,7 +123,7 @@ export const ExpenseDialog = ({ onSuccess }: { onSuccess: () => void }) => {
 
           {monthlyEquivalent !== null && formData.frequency === "yearly" && (
             <p className="text-sm text-muted-foreground">
-              Měsíčně: {monthlyEquivalent.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+              Měsíčně: {formatCurrency(monthlyEquivalent)}
             </p>
           )}
 

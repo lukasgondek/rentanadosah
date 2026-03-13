@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 
 /** Safely parse a numeric input value — returns undefined for empty/NaN */
@@ -215,7 +216,7 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
                   <SelectItem value="none">Žádný úvěr</SelectItem>
                   {loans.map((loan) => (
                     <SelectItem key={loan.id} value={loan.id}>
-                      {loan.name} ({new Intl.NumberFormat("cs-CZ").format(loan.original_amount)} Kč)
+                      {loan.name} ({formatCurrency(loan.original_amount)})
                     </SelectItem>
                   ))}
                 </SelectContent>

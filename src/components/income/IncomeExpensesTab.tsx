@@ -6,6 +6,7 @@ import { IncomeDialog } from "./IncomeDialog";
 import { IncomeTable } from "./IncomeTable";
 import { ExpenseDialog } from "@/components/expenses/ExpenseDialog";
 import { ExpenseTable } from "@/components/expenses/ExpenseTable";
+import { formatCurrency } from "@/lib/utils";
 
 interface Expense {
   id: string;
@@ -99,7 +100,7 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {totalMonthlyIncome.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                {formatCurrency(totalMonthlyIncome)}
               </div>
             </CardContent>
           </Card>
@@ -109,7 +110,7 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-500">
-                {totalMonthlyExpenses.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                {formatCurrency(totalMonthlyExpenses)}
               </div>
             </CardContent>
           </Card>
@@ -119,7 +120,7 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
             </CardHeader>
             <CardContent>
               <div className={`text-2xl font-bold ${monthlyCashflow >= 0 ? "text-green-600" : "text-red-500"}`}>
-                {monthlyCashflow >= 0 ? "+" : ""}{monthlyCashflow.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                {monthlyCashflow >= 0 ? "+" : ""}{formatCurrency(monthlyCashflow)}
               </div>
             </CardContent>
           </Card>
@@ -171,11 +172,11 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm">Měsíční příjem celkem:</span>
-                    <span className="font-bold text-lg">{calculateTotalMonthly(selfIncome).toLocaleString("cs-CZ")} Kč</span>
+                    <span className="font-bold text-lg">{formatCurrency(calculateTotalMonthly(selfIncome))}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm">Roční příjem celkem:</span>
-                    <span className="font-bold text-lg">{calculateTotalYearly(selfIncome).toLocaleString("cs-CZ")} Kč</span>
+                    <span className="font-bold text-lg">{formatCurrency(calculateTotalYearly(selfIncome))}</span>
                   </div>
                 </div>
               </CardContent>
@@ -189,11 +190,11 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm">Měsíční příjem celkem:</span>
-                    <span className="font-bold text-lg">{calculateTotalMonthly(partnerIncome).toLocaleString("cs-CZ")} Kč</span>
+                    <span className="font-bold text-lg">{formatCurrency(calculateTotalMonthly(partnerIncome))}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm">Roční příjem celkem:</span>
-                    <span className="font-bold text-lg">{calculateTotalYearly(partnerIncome).toLocaleString("cs-CZ")} Kč</span>
+                    <span className="font-bold text-lg">{formatCurrency(calculateTotalYearly(partnerIncome))}</span>
                   </div>
                 </div>
               </CardContent>
@@ -232,13 +233,13 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Měsíční výdaje celkem:</span>
                       <span className="font-bold text-lg text-red-500">
-                        {totalMonthlyExpenses.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                        {formatCurrency(totalMonthlyExpenses)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Roční výdaje celkem:</span>
                       <span className="font-bold text-lg">
-                        {(totalMonthlyExpenses * 12).toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                        {formatCurrency(totalMonthlyExpenses * 12)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -258,19 +259,19 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Příjmy/měs:</span>
                       <span className="font-bold text-green-600">
-                        +{totalMonthlyIncome.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                        +{formatCurrency(totalMonthlyIncome)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Výdaje/měs:</span>
                       <span className="font-bold text-red-500">
-                        -{totalMonthlyExpenses.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                        -{formatCurrency(totalMonthlyExpenses)}
                       </span>
                     </div>
                     <div className="border-t pt-2 flex justify-between items-center">
                       <span className="text-sm font-semibold">Čistý cashflow/měs:</span>
                       <span className={`font-bold text-lg ${monthlyCashflow >= 0 ? "text-green-600" : "text-red-500"}`}>
-                        {monthlyCashflow >= 0 ? "+" : ""}{monthlyCashflow.toLocaleString("cs-CZ", { maximumFractionDigits: 0 })} Kč
+                        {monthlyCashflow >= 0 ? "+" : ""}{formatCurrency(monthlyCashflow)}
                       </span>
                     </div>
                   </div>

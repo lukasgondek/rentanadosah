@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { grossToNet } from "@/lib/utils";
+import { grossToNet, formatCurrency } from "@/lib/utils";
 
 type IncomeCategory = "employment" | "self_employed_s7" | "rental_s9" | "business" | "other";
 type OwnerType = "self" | "partner";
@@ -325,7 +325,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                   />
                   {formData.incomeAmount && formData.expensePercentage && (
                     <p className="text-sm text-muted-foreground">
-                      Daňový základ: {(formData.incomeAmount * (1 - formData.expensePercentage / 100)).toLocaleString("cs-CZ")} Kč
+                      Daňový základ: {formatCurrency(formData.incomeAmount * (1 - formData.expensePercentage / 100))}
                     </p>
                   )}
                 </div>
@@ -343,7 +343,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                   />
                   {formData.incomeAmount && formData.realExpenses && (
                     <p className="text-sm text-muted-foreground">
-                      Daňový základ: {(formData.incomeAmount - formData.realExpenses).toLocaleString("cs-CZ")} Kč
+                      Daňový základ: {formatCurrency(formData.incomeAmount - formData.realExpenses)}
                     </p>
                   )}
                 </div>
@@ -375,7 +375,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
               </div>
               {formData.businessIncome && formData.businessExpenses && (
                 <p className="text-sm text-muted-foreground">
-                  Daňový základ: {(formData.businessIncome - formData.businessExpenses).toLocaleString("cs-CZ")} Kč
+                  Daňový základ: {formatCurrency(formData.businessIncome - formData.businessExpenses)}
                 </p>
               )}
             </div>

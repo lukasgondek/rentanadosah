@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { calculateAnnuity, formatNumber } from "@/lib/utils";
+import { calculateAnnuity, formatNumber, formatCurrency } from "@/lib/utils";
 
 /** Safely parse a numeric input value — returns undefined for empty/NaN */
 const parseNum = (val: string): number | undefined => {
@@ -341,7 +341,7 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
                       <SelectItem value="manual">Jiná (zadat ručně)</SelectItem>
                       {properties.map((prop) => (
                         <SelectItem key={prop.id} value={prop.id}>
-                          {prop.identifier} ({new Intl.NumberFormat("cs-CZ").format(prop.estimated_value)} Kč)
+                          {prop.identifier} ({formatCurrency(prop.estimated_value)})
                         </SelectItem>
                       ))}
                     </SelectContent>
