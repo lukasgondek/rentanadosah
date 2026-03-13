@@ -355,6 +355,99 @@ export type Database = {
         }
         Relationships: []
       }
+      property_units: {
+        Row: {
+          id: string
+          property_id: string
+          name: string
+          monthly_rent: number
+          monthly_expenses: number
+          is_cadastrally_separated: boolean
+          estimated_value: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          property_id: string
+          name: string
+          monthly_rent?: number
+          monthly_expenses?: number
+          is_cadastrally_separated?: boolean
+          estimated_value?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          property_id?: string
+          name?: string
+          monthly_rent?: number
+          monthly_expenses?: number
+          is_cadastrally_separated?: boolean
+          estimated_value?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_units_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loan_collaterals: {
+        Row: {
+          id: string
+          loan_id: string
+          property_id: string | null
+          property_unit_id: string | null
+          collateral_amount: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          loan_id: string
+          property_id?: string | null
+          property_unit_id?: string | null
+          collateral_amount: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          loan_id?: string
+          property_id?: string | null
+          property_unit_id?: string | null
+          collateral_amount?: number
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_collaterals_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_collaterals_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_collaterals_property_unit_id_fkey"
+            columns: ["property_unit_id"]
+            isOneToOne: false
+            referencedRelation: "property_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       properties: {
         Row: {
           created_at: string | null
@@ -365,6 +458,7 @@ export type Database = {
           loan_id: string | null
           monthly_expenses: number | null
           monthly_rent: number | null
+          property_type: string
           purchase_price: number
           updated_at: string | null
           user_id: string
@@ -379,6 +473,7 @@ export type Database = {
           loan_id?: string | null
           monthly_expenses?: number | null
           monthly_rent?: number | null
+          property_type?: string
           purchase_price: number
           updated_at?: string | null
           user_id: string
@@ -393,6 +488,7 @@ export type Database = {
           loan_id?: string | null
           monthly_expenses?: number | null
           monthly_rent?: number | null
+          property_type?: string
           purchase_price?: number
           updated_at?: string | null
           user_id?: string

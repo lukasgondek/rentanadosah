@@ -4,7 +4,8 @@ import { PropertyDialog } from "./PropertyDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Building2, Home } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber as fmtNumber } from "@/lib/utils";
 
@@ -83,28 +84,38 @@ export default function PropertiesTab({ userId: viewUserId }: { userId?: string 
               <TableHead className="text-right">Měsíční náklady (Kč)</TableHead>
               <TableHead className="text-right">Roční růst (%)</TableHead>
               <TableHead>Úvěr</TableHead>
-              <TableHead>Plán</TableHead>
               <TableHead className="text-right">Akce</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {properties.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Žádné nemovitosti
                 </TableCell>
               </TableRow>
             ) : (
               properties.map((property) => (
                 <TableRow key={property.id}>
-                  <TableCell className="font-medium">{property.identifier}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      {property.property_type === "multi" ? (
+                        <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      ) : (
+                        <Home className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <span>{property.identifier}</span>
+                      {property.property_type === "multi" && (
+                        <Badge variant="outline" className="text-xs">Činžák</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">{formatNumber(property.purchase_price)}</TableCell>
                   <TableCell className="text-right">{formatNumber(property.estimated_value)}</TableCell>
                   <TableCell className="text-right">{formatNumber(property.monthly_rent)}</TableCell>
                   <TableCell className="text-right">{formatNumber(property.monthly_expenses)}</TableCell>
                   <TableCell className="text-right">{property.yearly_appreciation_percent !== null ? property.yearly_appreciation_percent + "%" : "-"}</TableCell>
                   <TableCell>{property.loans?.name || "-"}</TableCell>
-                  <TableCell>{property.is_forecast ? "Ano" : "Ne"}</TableCell>
                   {!readOnly && (
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
