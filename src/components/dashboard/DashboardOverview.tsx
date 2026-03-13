@@ -1,8 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TrendingUp, TrendingDown, Wallet, DollarSign } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Download, FileText, FileSpreadsheet } from "lucide-react";
 import { cn, formatCurrency, formatNumber, calculateAnnuity } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { exportToPDF, exportToExcel, type ExportData } from "@/lib/export";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -57,6 +60,13 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
     tenYear: 0,
   });
   const [forecastSteps, setForecastSteps] = useState<any[]>([]);
+  const rawDataRef = useRef<{
+    incomeData: any[];
+    expenseData: any[];
+    loanData: any[];
+    propertyData: any[];
+    investmentData: any[];
+  }>({ incomeData: [], expenseData: [], loanData: [], propertyData: [], investmentData: [] });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -89,6 +99,9 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
       const loanData = loanRes.data || [];
       const propertyData = propertyRes.data || [];
       const investmentData = investmentRes.data || [];
+
+      // Store raw data for export
+      rawDataRef.current = { incomeData, expenseData, loanData, propertyData, investmentData };
 
       // ── Income ──
       const employment = incomeData
@@ -199,13 +212,97 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
 
   const monthlyCashflow = incomeSummary.total - expenseSummary.total - loanPayments;
 
+  const toMonthlyExpense = (e: any): number => {
+    if (e.monthly_amount) return e.monthly_amount;
+    if (e.yearly_amount) return e.yearly_amount / 12;
+    if (e.frequency === "yearly") return (e.amount || 0) / 12;
+    return e.amount || 0;
+  };
+
+  const buildExportData = (): ExportData => {
+    const { incomeData, expenseData, loanData, propertyData, investmentData } = rawDataRef.current;
+    return {
+      monthlyCashflow,
+      netWorth: netWorth.current,
+      netWorth5yr: netWorth.fiveYear,
+      netWorth10yr: netWorth.tenYear,
+      incomes: incomeData.map((i: any) => ({
+        name: i.name || "Bez názvu",
+        type: i.type || "other",
+        monthlyAmount: i.monthly_amount || 0,
+        yearlyAmount: i.yearly_amount || (i.monthly_amount ? i.monthly_amount * 12 : 0),
+      })),
+      expenses: expenseData.map((e: any) => ({
+        name: e.name || "Bez názvu",
+        monthlyAmount: toMonthlyExpense(e),
+        isRecurring: !!(e.is_recurring || e.is_regular),
+      })),
+      loans: loanData.map((l: any) => ({
+        name: l.name || "Bez názvu",
+        bankName: l.bank_name || null,
+        originalAmount: l.original_amount || 0,
+        remainingPrincipal: l.remaining_principal || 0,
+        monthlyPayment: l.monthly_payment || 0,
+        interestRate: l.interest_rate || 0,
+        termMonths: l.term_months || 0,
+      })),
+      properties: propertyData.map((p: any) => ({
+        identifier: p.identifier || "Bez názvu",
+        purchasePrice: p.purchase_price || 0,
+        estimatedValue: p.estimated_value || 0,
+        monthlyRent: p.monthly_rent || 0,
+        monthlyExpenses: p.monthly_expenses || 0,
+      })),
+      investments: investmentData.map((i: any) => ({
+        name: i.name || "Bez názvu",
+        type: i.type || "other",
+        amount: i.amount || 0,
+        yearlyReturnPercent: i.yearly_return_percent || 0,
+      })),
+    };
+  };
+
+  const handleExport = (format: "pdf" | "excel") => {
+    try {
+      const data = buildExportData();
+      if (format === "pdf") {
+        exportToPDF(data);
+      } else {
+        exportToExcel(data);
+      }
+      toast({ title: "Export úspěšný", description: `Soubor byl stažen ve formátu ${format === "pdf" ? "PDF" : "Excel"}.` });
+    } catch (error) {
+      toast({ title: "Chyba exportu", description: "Nepodařilo se exportovat data.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">
-          Přehled vašich financí a investic
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">
+            Přehled vašich financí a investic
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Download className="mr-2 h-4 w-4" />
+              Exportovat
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleExport("pdf")}>
+              <FileText className="mr-2 h-4 w-4" />
+              Stáhnout PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport("excel")}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Stáhnout Excel
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

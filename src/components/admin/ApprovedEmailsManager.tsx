@@ -4,15 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { z } from "zod";
+
+type AppRole = "user" | "prospect";
 
 interface ApprovedEmail {
   id: string;
   email: string;
   created_at: string;
   notes: string | null;
+  role: AppRole;
 }
 
 const emailSchema = z.object({
@@ -25,6 +30,7 @@ export const ApprovedEmailsManager = () => {
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [selectedRole, setSelectedRole] = useState<AppRole>("user");
   const [adding, setAdding] = useState(false);
   const { toast } = useToast();
 
@@ -75,6 +81,7 @@ export const ApprovedEmailsManager = () => {
         .insert({
           email: newEmail.trim().toLowerCase(),
           notes: notes.trim() || null,
+          role: selectedRole,
           approved_by: user?.id,
         });
 
@@ -95,6 +102,7 @@ export const ApprovedEmailsManager = () => {
         });
         setNewEmail("");
         setNotes("");
+        setSelectedRole("user");
         fetchEmails();
       }
     } catch (error) {
@@ -173,6 +181,18 @@ export const ApprovedEmailsManager = () => {
                 maxLength={500}
               />
             </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as AppRole)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Klient (plný přístup)</SelectItem>
+                  <SelectItem value="prospect">Zájemce (bez plánování)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button type="submit" disabled={adding}>
               {adding ? (
                 <>
@@ -210,7 +230,12 @@ export const ApprovedEmailsManager = () => {
                   className="flex items-center justify-between p-3 border rounded-lg"
                 >
                   <div className="flex-1">
-                    <p className="font-medium">{item.email}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{item.email}</p>
+                      <Badge variant={item.role === "prospect" ? "secondary" : "default"} className="text-xs">
+                        {item.role === "prospect" ? "Zájemce" : "Klient"}
+                      </Badge>
+                    </div>
                     {item.notes && (
                       <p className="text-sm text-muted-foreground">{item.notes}</p>
                     )}

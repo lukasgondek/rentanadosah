@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type UserRole = "admin" | "user" | null;
+export type UserRole = "admin" | "user" | "prospect" | null;
 
 export const useUserRole = () => {
   const [role, setRole] = useState<UserRole>(null);
@@ -27,7 +27,8 @@ export const useUserRole = () => {
           setRole("user");
         } else {
           const hasAdmin = data.some((r) => r.role === "admin");
-          setRole(hasAdmin ? "admin" : "user");
+          const hasProspect = data.some((r) => r.role === "prospect");
+          setRole(hasAdmin ? "admin" : hasProspect ? "prospect" : "user");
         }
       } catch (error) {
         setRole("user");
@@ -45,5 +46,5 @@ export const useUserRole = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  return { role, loading, isAdmin: role === "admin" };
+  return { role, loading, isAdmin: role === "admin", isProspect: role === "prospect" };
 };

@@ -11,7 +11,7 @@ import PropertiesTab from "@/components/properties/PropertiesTab";
 import PlanningTab from "@/components/planning/PlanningTab";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { useUserRole } from "@/hooks/useUserRole";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -19,7 +19,7 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { isAdmin, isProspect, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -89,6 +89,20 @@ const Index = () => {
       case "properties":
         return <PropertiesTab userId={viewUserId} />;
       case "planning":
+        if (isProspect) {
+          return (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="rounded-full bg-muted p-6 mb-4">
+                <Lock className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h2 className="text-xl font-semibold mb-2">Plánování je dostupné pouze pro klienty</h2>
+              <p className="text-muted-foreground max-w-md">
+                Tato sekce je dostupná pouze pro účastníky Akcelerátoru Realitního Rentiéra.
+                Pro přístup kontaktujte svého poradce.
+              </p>
+            </div>
+          );
+        }
         return <PlanningTab userId={viewUserId} />;
       case "emails":
         return null; // Handled by admin dashboard
@@ -98,7 +112,7 @@ const Index = () => {
   };
 
   return (
-    <Layout activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin}>
+    <Layout activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} isProspect={isProspect}>
       {renderContent()}
     </Layout>
   );

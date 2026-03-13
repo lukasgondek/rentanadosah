@@ -21,6 +21,7 @@ export type Database = {
           email: string
           id: string
           notes: string | null
+          role: Database["public"]["Enums"]["app_role"]
         }
         Insert: {
           approved_by?: string | null
@@ -28,6 +29,7 @@ export type Database = {
           email: string
           id?: string
           notes?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
         }
         Update: {
           approved_by?: string | null
@@ -35,6 +37,7 @@ export type Database = {
           email?: string
           id?: string
           notes?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
         }
         Relationships: []
       }
@@ -449,7 +452,7 @@ export type Database = {
       is_email_approved: { Args: { check_email: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "prospect"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -577,7 +580,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "prospect"],
     },
   },
 } as const
