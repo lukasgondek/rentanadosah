@@ -54,13 +54,45 @@ export const IncomeDialog = ({ onSuccess, userId }: { onSuccess: () => void; use
     otherFrequency: "monthly",
   });
 
-  const PAUSALNI_DAN_MONTHLY = 7498; // 2024: daň 100 + SP ~4430 + ZP ~2968
+  // Paušální daň — 3 pásma (2024/2025)
+  const PAUSALNI_PASMA = [
+    { id: 1, maxPrijem: 1_000_000, mesicniPlatba: 7_498 },
+    { id: 2, maxPrijem: 1_500_000, mesicniPlatba: 16_000 },
+    { id: 3, maxPrijem: 2_000_000, mesicniPlatba: 26_000 },
+  ];
+
+  const getPausalnePasmo = (rocniPrijem: number) => {
+    for (const pasmo of PAUSALNI_PASMA) {
+      if (rocniPrijem <= pasmo.maxPrijem) return pasmo;
+    }
+    return null; // nad 2M — nelze použít
+  };
+
+  // Blízkost hranice pásma (pro UX warning)
+  const getPasmoWarning = (rocniPrijem: number): string | null => {
+    const thresholds = [1_000_000, 1_500_000, 2_000_000];
+    for (const t of thresholds) {
+      if (rocniPrijem > t * 0.98 && rocniPrijem <= t) {
+        return `Jste blízko hranice ${formatCurrency(t)} — při překročení skočíte do vyššího pásma.`;
+      }
+      if (rocniPrijem > t && rocniPrijem <= t * 1.02) {
+        const nizsiPasmo = PAUSALNI_PASMA.find(p => p.maxPrijem === t);
+        const vyssiPasmo = PAUSALNI_PASMA.find(p => p.maxPrijem > t);
+        if (nizsiPasmo && vyssiPasmo) {
+          const rozdil = (vyssiPasmo.mesicniPlatba - nizsiPasmo.mesicniPlatba) * 12;
+          return `Těsně nad hranicí ${formatCurrency(t)} — platíte o ${formatCurrency(rozdil)}/rok více. Zvažte optimalizaci příjmů.`;
+        }
+      }
+    }
+    return null;
+  };
 
   const calculateTaxBase = () => {
     if (formData.category === "self_employed_s7" || formData.category === "rental_s9") {
       if (formData.expenseType === "pausalni_dan" && formData.incomeAmount) {
-        // Paušální daň: celý příjem je k dispozici, odvody jsou fixní platba
-        return formData.incomeAmount - PAUSALNI_DAN_MONTHLY * 12;
+        const pasmo = getPausalnePasmo(formData.incomeAmount);
+        if (!pasmo) return null; // nad 2M — nelze
+        return formData.incomeAmount - pasmo.mesicniPlatba * 12;
       } else if (formData.expenseType === "flat_rate" && formData.incomeAmount && formData.expensePercentage) {
         return formData.incomeAmount * (1 - formData.expensePercentage / 100);
       } else if (formData.expenseType === "real" && formData.incomeAmount && formData.realExpenses) {
@@ -113,7 +145,10 @@ export const IncomeDialog = ({ onSuccess, userId }: { onSuccess: () => void; use
         showError("Vyplňte reálné výdaje");
         return;
       }
-      // pausalni_dan nepotřebuje další validaci — stačí incomeAmount
+      if (formData.expenseType === "pausalni_dan" && formData.incomeAmount && formData.incomeAmount > 2_000_000) {
+        showError("Paušální daň nelze použít při příjmech nad 2 000 000 Kč");
+        return;
+      }
     } else if (formData.category === "business") {
       if (!formData.businessIncome || formData.businessIncome <= 0) {
         showError("Vyplňte firemní příjmy");
@@ -319,20 +354,70 @@ export const IncomeDialog = ({ onSuccess, userId }: { onSuccess: () => void; use
                 </RadioGroup>
               </div>
 
-              {formData.expenseType === "pausalni_dan" && (
-                <div className="space-y-2">
-                  <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-700 dark:text-blue-300">
-                    <p className="font-medium mb-1">Paušální daň (2024)</p>
-                    <p>Fixní měsíční platba {formatCurrency(PAUSALNI_DAN_MONTHLY)} (daň + SP + ZP).</p>
-                    <p className="mt-1">Podmínky: příjmy do 2 mil. Kč, neplátce DPH, bez zaměstnání.</p>
+              {formData.expenseType === "pausalni_dan" && (() => {
+                const prijem = formData.incomeAmount || 0;
+                const pasmo = prijem > 0 ? getPausalnePasmo(prijem) : null;
+                const warning = prijem > 0 ? getPasmoWarning(prijem) : null;
+                const nelze = prijem > 2_000_000;
+                const nevyplati = pasmo && prijem > 0 && prijem < pasmo.mesicniPlatba * 12;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-700 dark:text-blue-300">
+                      <p className="font-medium mb-1">Paušální daň (2024/2025)</p>
+                      <table className="w-full text-xs mt-2">
+                        <thead>
+                          <tr className="border-b border-blue-200 dark:border-blue-800">
+                            <th className="text-left py-1">Pásmo</th>
+                            <th className="text-right py-1">Max. příjem</th>
+                            <th className="text-right py-1">Měsíčně</th>
+                            <th className="text-right py-1">Ročně</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {PAUSALNI_PASMA.map(p => (
+                            <tr key={p.id} className={pasmo?.id === p.id ? "font-bold" : "opacity-70"}>
+                              <td className="py-1">{p.id}. pásmo {pasmo?.id === p.id && "←"}</td>
+                              <td className="text-right">{formatCurrency(p.maxPrijem)}</td>
+                              <td className="text-right">{formatCurrency(p.mesicniPlatba)}</td>
+                              <td className="text-right">{formatCurrency(p.mesicniPlatba * 12)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="mt-2 text-xs">Podmínky: neplátce DPH, bez zaměstnání, příjmy do 2 mil. Kč.</p>
+                    </div>
+
+                    {nelze && (
+                      <div className="rounded-lg bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-700 dark:text-red-300">
+                        Příjem přesahuje 2 000 000 Kč — paušální daň nelze použít.
+                      </div>
+                    )}
+
+                    {nevyplati && (
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-700 dark:text-amber-300">
+                        Příjem je nižší než roční odvod — paušální daň se nemusí vyplatit.
+                      </div>
+                    )}
+
+                    {warning && (
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-700 dark:text-amber-300">
+                        {warning}
+                      </div>
+                    )}
+
+                    {pasmo && prijem > 0 && !nelze && (
+                      <div className="text-sm space-y-1">
+                        <p><span className="text-muted-foreground">Pásmo:</span> <span className="font-medium">{pasmo.id}. pásmo</span></p>
+                        <p><span className="text-muted-foreground">Měsíční odvod:</span> <span className="font-medium">{formatCurrency(pasmo.mesicniPlatba)}</span></p>
+                        <p><span className="text-muted-foreground">Roční odvod:</span> <span className="font-medium">{formatCurrency(pasmo.mesicniPlatba * 12)}</span></p>
+                        <p><span className="text-muted-foreground">Čistý příjem:</span> <span className="font-medium">{formatCurrency(prijem - pasmo.mesicniPlatba * 12)} / rok</span></p>
+                        <p><span className="text-muted-foreground">Efektivní sazba:</span> <span className="font-medium">{((pasmo.mesicniPlatba * 12 / prijem) * 100).toFixed(1)} %</span></p>
+                      </div>
+                    )}
                   </div>
-                  {formData.incomeAmount && formData.incomeAmount > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Čistý příjem po paušální dani: {formatCurrency(formData.incomeAmount - PAUSALNI_DAN_MONTHLY * 12)} / rok
-                    </p>
-                  )}
-                </div>
-              )}
+                );
+              })()}
 
               {formData.expenseType === "flat_rate" && (
                 <div className="space-y-2">
