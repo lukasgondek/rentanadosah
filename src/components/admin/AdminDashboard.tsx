@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, User } from "lucide-react";
+import { Loader2, Search, Trash2, User } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ApprovedEmailsManager } from "./ApprovedEmailsManager";
 
 interface Client {
@@ -24,6 +25,7 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
   const { toast } = useToast();
 
   const filteredClients = clients.filter((client) => {
@@ -56,6 +58,41 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteClient = async (client: Client) => {
+    try {
+      // Delete all related data (RLS allows admin full access)
+      const tables = [
+        { table: "client_questions", column: "client_id" },
+        { table: "client_tasks", column: "client_id" },
+        { table: "consultation_records", column: "client_id" },
+        { table: "investments", column: "user_id" },
+        { table: "loans", column: "user_id" },
+        { table: "properties", column: "user_id" },
+        { table: "income_sources", column: "user_id" },
+        { table: "expenses", column: "user_id" },
+        { table: "planned_investments", column: "user_id" },
+        { table: "user_roles", column: "user_id" },
+      ];
+
+      for (const { table, column } of tables) {
+        await supabase.from(table).delete().eq(column, client.id);
+      }
+
+      // Delete from approved_emails
+      await supabase.from("approved_emails").delete().eq("email", client.email);
+
+      // Delete profile
+      await supabase.from("profiles").delete().eq("id", client.id);
+
+      toast({ title: "Klient smazán", description: `${client.full_name || client.email} byl odstraněn ze systému.` });
+      setDeletingClient(null);
+      if (selectedClientId === client.id) onSelectClient(null);
+      fetchClients();
+    } catch (error) {
+      toast({ title: "Chyba", description: "Nepodařilo se smazat klienta", variant: "destructive" });
     }
   };
 
@@ -127,9 +164,19 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
                               )}
                             </div>
                           </div>
-                          <Button onClick={() => onSelectClient(client.id)}>
-                            Zobrazit kalkulačku
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button onClick={() => onSelectClient(client.id)}>
+                              Zobrazit kalkulačku
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); setDeletingClient(client); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -159,6 +206,28 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
           </div>
         </div>
       )}
+
+      <AlertDialog open={!!deletingClient} onOpenChange={() => setDeletingClient(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Smazat klienta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Trvale smazat <strong>{deletingClient?.full_name || deletingClient?.email}</strong> a všechna jeho data
+              (investice, příjmy, výdaje, nemovitosti, úvěry, zápisy, úkoly, dotazy)?
+              Tato akce nelze vrátit.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Zrušit</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingClient && handleDeleteClient(deletingClient)}
+            >
+              Smazat klienta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
