@@ -78,14 +78,18 @@ export default function QuestionsList({ userId: viewUserId, isAdmin = false }: P
       return;
     }
 
-    // SOS notification via Supabase Edge Function
+    // SOS notification via Supabase RPC (pg_net → Telegram)
     if (newIsSos) {
       try {
-        await supabase.functions.invoke("sos-notification", {
-          body: {
-            clientName: "Klient kalkulačky",
-            question: newQuestion.trim(),
-          },
+        // Get client name from profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", targetUserId)
+          .single();
+        await supabase.rpc("notify_sos_telegram", {
+          client_name: profile?.full_name || user.email || "Neznámý klient",
+          question: newQuestion.trim(),
         });
       } catch (err) {
         console.warn("SOS notification failed:", err);
