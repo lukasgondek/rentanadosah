@@ -8,12 +8,12 @@ import { Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber as fmtNumber, calculateAnnuity } from "@/lib/utils";
 
-export default function PlanningTab({ userId: viewUserId }: { userId?: string | null } = {}) {
+export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { userId?: string | null; isAdmin?: boolean } = {}) {
   const [investments, setInvestments] = useState<any[]>([]);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
-  const readOnly = !!viewUserId;
+  const readOnly = !!viewUserId && !isAdmin;
 
   const fetchInvestments = async () => {
     let query = supabase
@@ -162,7 +162,7 @@ export default function PlanningTab({ userId: viewUserId }: { userId?: string | 
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Plánování investic</h2>
-        {!readOnly && <PlannedInvestmentDialog onSuccess={fetchInvestments} />}
+        {!readOnly && <PlannedInvestmentDialog onSuccess={fetchInvestments} userId={viewUserId || undefined} />}
       </div>
 
       <div className="rounded-md border">

@@ -20,7 +20,7 @@ interface ExpenseFormData {
   is_recurring: boolean;
 }
 
-export const ExpenseDialog = ({ onSuccess }: { onSuccess: () => void }) => {
+export const ExpenseDialog = ({ onSuccess, userId }: { onSuccess: () => void; userId?: string }) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const [formData, setFormData] = useState<ExpenseFormData>({
@@ -45,7 +45,7 @@ export const ExpenseDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     }
 
     const { error } = await supabase.from("expenses").insert({
-      user_id: user.id,
+      user_id: userId || user.id,
       name: formData.name.trim() || "Bez názvu",
       amount: formData.amount,
       frequency: formData.frequency,

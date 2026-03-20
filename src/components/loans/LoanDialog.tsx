@@ -34,9 +34,10 @@ interface CollateralEntry {
 interface LoanDialogProps {
   onSuccess: () => void;
   editData?: any;
+  userId?: string;
 }
 
-export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
+export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => {
   const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
   const [isPaymentManual, setIsPaymentManual] = useState(!!editData?.monthly_payment);
@@ -232,7 +233,7 @@ export const LoanDialog = ({ onSuccess, editData }: LoanDialogProps) => {
       .join(", ");
 
     const dataToSave = {
-      user_id: user.id,
+      user_id: userId || user.id,
       name: formData.name?.trim() || "Úvěr",
       original_amount: amount,
       remaining_principal: remaining,

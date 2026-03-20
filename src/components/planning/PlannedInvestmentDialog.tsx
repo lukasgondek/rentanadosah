@@ -19,9 +19,10 @@ const parseNum = (val: string): number | undefined => {
 interface PlannedInvestmentDialogProps {
   onSuccess: () => void;
   editData?: any;
+  userId?: string;
 }
 
-export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestmentDialogProps) => {
+export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: PlannedInvestmentDialogProps) => {
   const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
 
@@ -218,7 +219,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData }: PlannedInvestme
     }
 
     const dataToSave = {
-      user_id: user.id,
+      user_id: userId || user.id,
       property_identifier: formData.property_identifier.trim(),
       purchase_price: purchasePrice,
       estimated_value: estimatedValue,

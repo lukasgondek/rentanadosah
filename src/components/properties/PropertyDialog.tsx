@@ -39,9 +39,10 @@ const emptyUnit = (index: number): PropertyUnit => ({
 interface PropertyDialogProps {
   onSuccess: () => void;
   editData?: any;
+  userId?: string;
 }
 
-export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => {
+export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogProps) => {
   const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
   const [loans, setLoans] = useState<any[]>([]);
@@ -137,7 +138,7 @@ export const PropertyDialog = ({ onSuccess, editData }: PropertyDialogProps) => 
     }
 
     const dataToSave = {
-      user_id: user.id,
+      user_id: userId || user.id,
       identifier: formData.identifier.trim(),
       purchase_price: purchasePrice,
       estimated_value: estimatedValue,

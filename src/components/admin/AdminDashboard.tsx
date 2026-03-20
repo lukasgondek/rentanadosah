@@ -155,7 +155,7 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
           </div>
           <div>
             <p className="font-semibold">{clients.find(c => c.id === selectedClientId)?.full_name || "Klient"}</p>
-            <p className="text-sm text-muted-foreground">{clients.find(c => c.id === selectedClientId)?.email} — zobrazení read-only</p>
+            <p className="text-sm text-muted-foreground">{clients.find(c => c.id === selectedClientId)?.email} — plný přístup</p>
           </div>
         </div>
       )}

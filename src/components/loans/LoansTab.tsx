@@ -8,12 +8,12 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber as fmtNumber } from "@/lib/utils";
 
-export default function LoansTab({ userId: viewUserId }: { userId?: string | null } = {}) {
+export default function LoansTab({ userId: viewUserId, isAdmin = false }: { userId?: string | null; isAdmin?: boolean } = {}) {
   const [loans, setLoans] = useState<any[]>([]);
   const [editingLoan, setEditingLoan] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
-  const readOnly = !!viewUserId;
+  const readOnly = !!viewUserId && !isAdmin;
 
   const fetchLoans = async () => {
     let query = supabase
@@ -69,7 +69,7 @@ export default function LoansTab({ userId: viewUserId }: { userId?: string | nul
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Úvěry</h2>
-        {!readOnly && <LoanDialog onSuccess={fetchLoans} />}
+        {!readOnly && <LoanDialog onSuccess={fetchLoans} userId={viewUserId || undefined} />}
       </div>
 
       <div className="rounded-md border">

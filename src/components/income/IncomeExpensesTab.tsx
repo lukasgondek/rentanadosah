@@ -16,11 +16,11 @@ interface Expense {
   is_recurring: boolean | null;
 }
 
-const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = {}) => {
+const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: string | null; isAdmin?: boolean } = {}) => {
   const [incomeSources, setIncomeSources] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const readOnly = !!viewUserId;
+  const readOnly = !!viewUserId && !isAdmin;
 
   const fetchIncomeSources = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -141,7 +141,7 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
                   <CardTitle>Přehled příjmů</CardTitle>
                   <CardDescription>Všechny kategorie příjmů pro vás i vašeho partnera</CardDescription>
                 </div>
-                {!readOnly && <IncomeDialog onSuccess={fetchIncomeSources} />}
+                {!readOnly && <IncomeDialog onSuccess={fetchIncomeSources} userId={viewUserId || undefined} />}
               </div>
             </CardHeader>
             <CardContent>
@@ -210,7 +210,7 @@ const IncomeExpensesTab = ({ userId: viewUserId }: { userId?: string | null } = 
                   <CardTitle>Pravidelné výdaje</CardTitle>
                   <CardDescription>Měsíční a roční náklady</CardDescription>
                 </div>
-                {!readOnly && <ExpenseDialog onSuccess={fetchExpenses} />}
+                {!readOnly && <ExpenseDialog onSuccess={fetchExpenses} userId={viewUserId || undefined} />}
               </div>
             </CardHeader>
             <CardContent>

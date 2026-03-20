@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, Download, FileText, FileSpreadsheet } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Download, FileText, FileSpreadsheet, Lock } from "lucide-react";
 import { cn, formatCurrency, formatNumber, calculateAnnuity } from "@/lib/utils";
 import { exportToPDF, exportToExcel, type ExportData } from "@/lib/export";
 import { useState, useEffect, useRef } from "react";
@@ -39,7 +39,7 @@ const MetricCard = ({ title, value, description, icon: Icon, trend }: MetricCard
   );
 };
 
-const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = {}) => {
+const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?: string | null; isProspect?: boolean } = {}) => {
   const [incomeSummary, setIncomeSummary] = useState({
     employment: 0,
     selfEmployed: 0,
@@ -224,8 +224,8 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
     return {
       monthlyCashflow,
       netWorth: netWorth.current,
-      netWorth5yr: netWorth.fiveYear,
-      netWorth10yr: netWorth.tenYear,
+      netWorth5yr: isProspect ? 0 : netWorth.fiveYear,
+      netWorth10yr: isProspect ? 0 : netWorth.tenYear,
       incomes: incomeData.map((i: any) => ({
         name: i.name || "Bez názvu",
         type: i.type || "other",
@@ -319,20 +319,50 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
           description="Nemovitosti + investice − dluhy"
           icon={DollarSign}
         />
-        <MetricCard
-          title="Net Worth za 5 let"
-          value={formatCurrency(netWorth.fiveYear)}
-          trend="up"
-          description="Odhadovaná hodnota"
-          icon={TrendingUp}
-        />
-        <MetricCard
-          title="Net Worth za 10 let"
-          value={formatCurrency(netWorth.tenYear)}
-          trend="up"
-          description="Odhadovaná hodnota"
-          icon={TrendingUp}
-        />
+        {isProspect ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Net Worth za 5 let</CardTitle>
+              <div className="p-2 bg-muted rounded-full">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-muted-foreground">Nedostupné</div>
+              <p className="text-xs text-muted-foreground mt-1">Pouze pro klienty Akcelerátoru</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <MetricCard
+            title="Net Worth za 5 let"
+            value={formatCurrency(netWorth.fiveYear)}
+            trend="up"
+            description="Odhadovaná hodnota"
+            icon={TrendingUp}
+          />
+        )}
+        {isProspect ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Net Worth za 10 let</CardTitle>
+              <div className="p-2 bg-muted rounded-full">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-muted-foreground">Nedostupné</div>
+              <p className="text-xs text-muted-foreground mt-1">Pouze pro klienty Akcelerátoru</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <MetricCard
+            title="Net Worth za 10 let"
+            value={formatCurrency(netWorth.tenYear)}
+            trend="up"
+            description="Odhadovaná hodnota"
+            icon={TrendingUp}
+          />
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -403,7 +433,7 @@ const DashboardOverview = ({ userId: viewUserId }: { userId?: string | null } = 
         </Card>
       </div>
 
-      {forecastSteps.length > 0 && (
+      {!isProspect && forecastSteps.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Prognóza po realizaci plánů</CardTitle>

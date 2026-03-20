@@ -9,6 +9,8 @@ import InvestmentsTab from "@/components/investments/InvestmentsTab";
 import LoansTab from "@/components/loans/LoansTab";
 import PropertiesTab from "@/components/properties/PropertiesTab";
 import PlanningTab from "@/components/planning/PlanningTab";
+import StrategyTab from "@/components/strategy/StrategyTab";
+import StrategyProspectLP from "@/components/strategy/StrategyProspectLP";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Loader2, Lock } from "lucide-react";
@@ -79,15 +81,20 @@ const Index = () => {
   const renderClientContent = (viewUserId?: string | null) => {
     switch (activeTab) {
       case "dashboard":
-        return <DashboardOverview userId={viewUserId} />;
+        return <DashboardOverview userId={viewUserId} isProspect={isProspect} />;
       case "income-expenses":
-        return <IncomeExpensesTab userId={viewUserId} />;
+        return <IncomeExpensesTab userId={viewUserId} isAdmin={isAdmin} />;
       case "investments":
-        return <InvestmentsTab userId={viewUserId} />;
+        return <InvestmentsTab userId={viewUserId} isAdmin={isAdmin} />;
       case "loans":
-        return <LoansTab userId={viewUserId} />;
+        return <LoansTab userId={viewUserId} isAdmin={isAdmin} />;
       case "properties":
-        return <PropertiesTab userId={viewUserId} />;
+        return <PropertiesTab userId={viewUserId} isAdmin={isAdmin} />;
+      case "strategy":
+        if (isProspect) {
+          return <StrategyProspectLP />;
+        }
+        return <StrategyTab userId={viewUserId} isAdmin={isAdmin} />;
       case "planning":
         if (isProspect) {
           return (
@@ -103,7 +110,7 @@ const Index = () => {
             </div>
           );
         }
-        return <PlanningTab userId={viewUserId} />;
+        return <PlanningTab userId={viewUserId} isAdmin={isAdmin} />;
       case "emails":
         return null; // Handled by admin dashboard
       default:

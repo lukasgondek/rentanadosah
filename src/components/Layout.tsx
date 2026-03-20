@@ -14,6 +14,7 @@ import {
   X,
   Shield,
   Lock,
+  BookOpen,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ const Layout = ({ children, activeTab, onTabChange, isAdmin = false, isProspect 
     { id: "investments", label: "Investice", icon: TrendingUp },
     { id: "loans", label: "Úvěry", icon: CreditCard },
     { id: "properties", label: "Nemovitosti", icon: Home },
+    { id: "strategy", label: "Strategie", icon: BookOpen },
     { id: "planning", label: "Plánování", icon: TrendingUp },
   ];
 

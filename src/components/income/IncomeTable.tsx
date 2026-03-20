@@ -75,10 +75,13 @@ export const IncomeTable = ({
           <>
             <div>Příjmy: {income.income_amount ? formatCurrency(income.income_amount) : "-"}</div>
             {income.expense_type === "flat_rate" && (
-              <div>Výdaje: {income.expense_percentage}%</div>
+              <div>Výdaje: Paušál {income.expense_percentage}%</div>
             )}
             {income.expense_type === "real" && (
               <div>Výdaje: {income.real_expenses ? formatCurrency(income.real_expenses) : "-"}</div>
+            )}
+            {income.expense_type === "pausalni_dan" && (
+              <div>Režim: Paušální daň</div>
             )}
             <div className="font-semibold">Daň. základ: {income.tax_base ? formatCurrency(income.tax_base) : "-"}</div>
           </>

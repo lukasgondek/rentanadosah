@@ -13,7 +13,7 @@ import { grossToNet, formatCurrency } from "@/lib/utils";
 
 type IncomeCategory = "employment" | "self_employed_s7" | "rental_s9" | "business" | "other";
 type OwnerType = "self" | "partner";
-type ExpenseType = "flat_rate" | "real";
+type ExpenseType = "flat_rate" | "real" | "pausalni_dan";
 type OtherFrequency = "monthly" | "yearly";
 
 interface IncomeFormData {
@@ -43,7 +43,7 @@ const parseNum = (val: string): number | undefined => {
   return isNaN(num) ? undefined : num;
 };
 
-export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
+export const IncomeDialog = ({ onSuccess, userId }: { onSuccess: () => void; userId?: string }) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const [formData, setFormData] = useState<IncomeFormData>({
@@ -54,9 +54,14 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     otherFrequency: "monthly",
   });
 
+  const PAUSALNI_DAN_MONTHLY = 7498; // 2024: daň 100 + SP ~4430 + ZP ~2968
+
   const calculateTaxBase = () => {
     if (formData.category === "self_employed_s7" || formData.category === "rental_s9") {
-      if (formData.expenseType === "flat_rate" && formData.incomeAmount && formData.expensePercentage) {
+      if (formData.expenseType === "pausalni_dan" && formData.incomeAmount) {
+        // Paušální daň: celý příjem je k dispozici, odvody jsou fixní platba
+        return formData.incomeAmount - PAUSALNI_DAN_MONTHLY * 12;
+      } else if (formData.expenseType === "flat_rate" && formData.incomeAmount && formData.expensePercentage) {
         return formData.incomeAmount * (1 - formData.expensePercentage / 100);
       } else if (formData.expenseType === "real" && formData.incomeAmount && formData.realExpenses) {
         return formData.incomeAmount - formData.realExpenses;
@@ -108,6 +113,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
         showError("Vyplňte reálné výdaje");
         return;
       }
+      // pausalni_dan nepotřebuje další validaci — stačí incomeAmount
     } else if (formData.category === "business") {
       if (!formData.businessIncome || formData.businessIncome <= 0) {
         showError("Vyplňte firemní příjmy");
@@ -156,7 +162,7 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     }
 
     const { error } = await supabase.from("income_sources").insert({
-      user_id: user.id,
+      user_id: userId || user.id,
       category: formData.category,
       owner_type: formData.ownerType,
       name: (formData.name?.trim() || "Bez názvu"),
@@ -165,8 +171,8 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       net_salary: formData.netSalary || null,
       income_amount: formData.incomeAmount || null,
       expense_type: formData.expenseType,
-      expense_percentage: formData.expensePercentage ?? null,
-      real_expenses: formData.realExpenses || null,
+      expense_percentage: formData.expenseType === "flat_rate" ? (formData.expensePercentage ?? null) : null,
+      real_expenses: formData.expenseType === "real" ? (formData.realExpenses || null) : null,
       tax_base: taxBase,
       business_income: formData.businessIncome || null,
       business_expenses: formData.businessExpenses ?? null,
@@ -300,14 +306,33 @@ export const IncomeDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                 <RadioGroup value={formData.expenseType} onValueChange={(v) => setFormData({ ...formData, expenseType: v as ExpenseType })}>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="flat_rate" id="flat_rate" />
-                    <Label htmlFor="flat_rate">Uplatňuji paušál</Label>
+                    <Label htmlFor="flat_rate">Uplatňuji výdaje paušálem</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="real" id="real" />
                     <Label htmlFor="real">Vedu daňovou evidenci</Label>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="pausalni_dan" id="pausalni_dan" />
+                    <Label htmlFor="pausalni_dan">Jsem v režimu paušální daně</Label>
+                  </div>
                 </RadioGroup>
               </div>
+
+              {formData.expenseType === "pausalni_dan" && (
+                <div className="space-y-2">
+                  <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-700 dark:text-blue-300">
+                    <p className="font-medium mb-1">Paušální daň (2024)</p>
+                    <p>Fixní měsíční platba {formatCurrency(PAUSALNI_DAN_MONTHLY)} (daň + SP + ZP).</p>
+                    <p className="mt-1">Podmínky: příjmy do 2 mil. Kč, neplátce DPH, bez zaměstnání.</p>
+                  </div>
+                  {formData.incomeAmount && formData.incomeAmount > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Čistý příjem po paušální dani: {formatCurrency(formData.incomeAmount - PAUSALNI_DAN_MONTHLY * 12)} / rok
+                    </p>
+                  )}
+                </div>
+              )}
 
               {formData.expenseType === "flat_rate" && (
                 <div className="space-y-2">

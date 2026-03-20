@@ -13,9 +13,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 interface InvestmentDialogProps {
   onSuccess: () => void;
   editData?: any;
+  userId?: string;
 }
 
-export const InvestmentDialog = ({ onSuccess, editData }: InvestmentDialogProps) => {
+export const InvestmentDialog = ({ onSuccess, editData, userId }: InvestmentDialogProps) => {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const [formData, setFormData] = useState({
@@ -52,7 +53,7 @@ export const InvestmentDialog = ({ onSuccess, editData }: InvestmentDialogProps)
     }
 
     const dataToSave = {
-      user_id: user.id,
+      user_id: userId || user.id,
       name: formData.name?.trim() || "Bez názvu",
       type: formData.type,
       amount: parseFloat(formData.amount),

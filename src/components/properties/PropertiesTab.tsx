@@ -9,12 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber as fmtNumber } from "@/lib/utils";
 
-export default function PropertiesTab({ userId: viewUserId }: { userId?: string | null } = {}) {
+export default function PropertiesTab({ userId: viewUserId, isAdmin = false }: { userId?: string | null; isAdmin?: boolean } = {}) {
   const [properties, setProperties] = useState<any[]>([]);
   const [editingProperty, setEditingProperty] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
-  const readOnly = !!viewUserId;
+  const readOnly = !!viewUserId && !isAdmin;
 
   const fetchProperties = async () => {
     let query = supabase
@@ -70,7 +70,7 @@ export default function PropertiesTab({ userId: viewUserId }: { userId?: string 
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Nemovitosti</h2>
-        {!readOnly && <PropertyDialog onSuccess={fetchProperties} />}
+        {!readOnly && <PropertyDialog onSuccess={fetchProperties} userId={viewUserId || undefined} />}
       </div>
 
       <div className="rounded-md border">

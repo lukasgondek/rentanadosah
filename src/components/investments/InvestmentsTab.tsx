@@ -18,12 +18,12 @@ const investmentTypeLabels: Record<string, string> = {
   other: "Jiné",
 };
 
-export default function InvestmentsTab({ userId: viewUserId }: { userId?: string | null } = {}) {
+export default function InvestmentsTab({ userId: viewUserId, isAdmin = false }: { userId?: string | null; isAdmin?: boolean } = {}) {
   const [investments, setInvestments] = useState<any[]>([]);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
-  const readOnly = !!viewUserId;
+  const readOnly = !!viewUserId && !isAdmin;
 
   const fetchInvestments = async () => {
     let query = supabase
@@ -79,7 +79,7 @@ export default function InvestmentsTab({ userId: viewUserId }: { userId?: string
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Investice</h2>
-        {!readOnly && <InvestmentDialog onSuccess={fetchInvestments} />}
+        {!readOnly && <InvestmentDialog onSuccess={fetchInvestments} userId={viewUserId || undefined} />}
       </div>
 
       <div className="rounded-md border">
