@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -43,16 +43,70 @@ const parseNum = (val: string): number | undefined => {
   return isNaN(num) ? undefined : num;
 };
 
-export const IncomeDialog = ({ onSuccess, userId }: { onSuccess: () => void; userId?: string }) => {
-  const [open, setOpen] = useState(false);
+export interface IncomeEditData {
+  id: string;
+  category: string;
+  owner_type: string;
+  name: string;
+  gross_salary?: number | null;
+  net_salary?: number | null;
+  income_amount?: number | null;
+  expense_type?: string | null;
+  expense_percentage?: number | null;
+  real_expenses?: number | null;
+  business_income?: number | null;
+  business_expenses?: number | null;
+  other_amount?: number | null;
+  other_frequency?: string | null;
+}
+
+const editDataToFormData = (data: IncomeEditData): IncomeFormData => ({
+  category: data.category as IncomeCategory,
+  ownerType: data.owner_type as OwnerType,
+  name: data.name || "",
+  grossSalary: data.gross_salary ?? undefined,
+  netSalary: data.net_salary ?? undefined,
+  incomeAmount: data.income_amount ?? undefined,
+  expenseType: (data.expense_type as ExpenseType) || "flat_rate",
+  expensePercentage: data.expense_percentage ?? undefined,
+  realExpenses: data.real_expenses ?? undefined,
+  businessIncome: data.business_income ?? undefined,
+  businessExpenses: data.business_expenses ?? undefined,
+  otherAmount: data.other_amount ?? undefined,
+  otherFrequency: (data.other_frequency as OtherFrequency) || "monthly",
+});
+
+const defaultFormData: IncomeFormData = {
+  category: "employment",
+  ownerType: "self",
+  name: "",
+  expenseType: "flat_rate",
+  otherFrequency: "monthly",
+};
+
+export const IncomeDialog = ({ onSuccess, userId, editData, open: controlledOpen, onOpenChange }: {
+  onSuccess: () => void;
+  userId?: string;
+  editData?: IncomeEditData;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+  const isEdit = !!editData;
   const { toast } = useToast();
-  const [formData, setFormData] = useState<IncomeFormData>({
-    category: "employment",
-    ownerType: "self",
-    name: "",
-    expenseType: "flat_rate",
-    otherFrequency: "monthly",
-  });
+  const [formData, setFormData] = useState<IncomeFormData>(
+    editData ? editDataToFormData(editData) : defaultFormData
+  );
+
+  useEffect(() => {
+    if (open && editData) {
+      setFormData(editDataToFormData(editData));
+    } else if (open && !editData) {
+      setFormData(defaultFormData);
+    }
+  }, [open, editData]);
 
   // Paušální daň — 3 pásma (2024/2025)
   const PAUSALNI_PASMA = [
@@ -196,8 +250,7 @@ export const IncomeDialog = ({ onSuccess, userId }: { onSuccess: () => void; use
       yearlyAmount = taxBase;
     }
 
-    const { error } = await supabase.from("income_sources").insert({
-      user_id: userId || user.id,
+    const payload = {
       category: formData.category,
       owner_type: formData.ownerType,
       name: (formData.name?.trim() || "Bez názvu"),
@@ -216,37 +269,40 @@ export const IncomeDialog = ({ onSuccess, userId }: { onSuccess: () => void; use
       other_frequency: formData.otherFrequency,
       monthly_amount: monthlyAmount,
       yearly_amount: yearlyAmount,
-    });
+    };
+
+    let error;
+    if (isEdit && editData) {
+      ({ error } = await supabase.from("income_sources").update(payload).eq("id", editData.id));
+    } else {
+      ({ error } = await supabase.from("income_sources").insert({ ...payload, user_id: userId || user.id }));
+    }
 
     if (error) {
       toast({ title: "Chyba", description: error.message, variant: "destructive" });
       return;
     }
 
-    toast({ title: "Úspěch", description: "Příjem byl přidán" });
+    toast({ title: "Úspěch", description: isEdit ? "Příjem byl upraven" : "Příjem byl přidán" });
     setOpen(false);
-    setFormData({
-      category: "employment",
-      ownerType: "self",
-      name: "",
-      expenseType: "flat_rate",
-      otherFrequency: "monthly",
-    });
+    setFormData(defaultFormData);
     onSuccess();
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="mr-2 h-4 w-4" />
-          Přidat příjem
-        </Button>
-      </DialogTrigger>
+      {!isEdit && (
+        <DialogTrigger asChild>
+          <Button size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Přidat příjem
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Přidat nový příjem</DialogTitle>
-          <DialogDescription>Vyplňte údaje o příjmu</DialogDescription>
+          <DialogTitle>{isEdit ? "Upravit příjem" : "Přidat nový příjem"}</DialogTitle>
+          <DialogDescription>{isEdit ? "Upravte údaje o příjmu" : "Vyplňte údaje o příjmu"}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

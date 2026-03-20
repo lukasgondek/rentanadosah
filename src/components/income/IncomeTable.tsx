@@ -1,9 +1,11 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import { IncomeDialog, IncomeEditData } from "./IncomeDialog";
 
 interface IncomeSource {
   id: string;
@@ -39,14 +41,15 @@ const getOwnerLabel = (owner: string) => {
   return owner === "self" ? "Já" : "Partner";
 };
 
-export const IncomeTable = ({ 
-  incomeSources, 
-  onDelete 
-}: { 
+export const IncomeTable = ({
+  incomeSources,
+  onDelete
+}: {
   incomeSources: IncomeSource[];
   onDelete: () => void;
 }) => {
   const { toast } = useToast();
+  const [editingIncome, setEditingIncome] = useState<IncomeEditData | null>(null);
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("income_sources").delete().eq("id", id);
@@ -114,6 +117,7 @@ export const IncomeTable = ({
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -134,17 +138,35 @@ export const IncomeTable = ({
               {renderDetails(income)}
             </TableCell>
             <TableCell>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleDelete(income.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setEditingIncome(income as IncomeEditData)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDelete(income.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+    {editingIncome && (
+      <IncomeDialog
+        onSuccess={() => { setEditingIncome(null); onDelete(); }}
+        editData={editingIncome}
+        open={!!editingIncome}
+        onOpenChange={(open) => { if (!open) setEditingIncome(null); }}
+      />
+    )}
+    </>
   );
 };

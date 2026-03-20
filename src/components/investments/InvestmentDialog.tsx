@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,10 +14,14 @@ interface InvestmentDialogProps {
   onSuccess: () => void;
   editData?: any;
   userId?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export const InvestmentDialog = ({ onSuccess, editData, userId }: InvestmentDialogProps) => {
-  const [open, setOpen] = useState(false);
+export const InvestmentDialog = ({ onSuccess, editData, userId, open: controlledOpen, onOpenChange }: InvestmentDialogProps) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: editData?.name || "",
@@ -27,6 +31,19 @@ export const InvestmentDialog = ({ onSuccess, editData, userId }: InvestmentDial
     liquidity_months: editData?.liquidity_months?.toString() || "",
     is_forecast: editData?.is_forecast || false,
   });
+
+  useEffect(() => {
+    if (open && editData) {
+      setFormData({
+        name: editData.name || "",
+        type: editData.type || "cash",
+        amount: editData.amount?.toString() || "",
+        yearly_return_percent: editData.yearly_return_percent?.toString() || "",
+        liquidity_months: editData.liquidity_months?.toString() || "",
+        is_forecast: editData.is_forecast || false,
+      });
+    }
+  }, [open, editData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +70,7 @@ export const InvestmentDialog = ({ onSuccess, editData, userId }: InvestmentDial
     }
 
     const dataToSave = {
-      user_id: userId || user.id,
+      ...(editData ? {} : { user_id: userId || user.id }),
       name: formData.name?.trim() || "Bez názvu",
       type: formData.type,
       amount: parseFloat(formData.amount),
@@ -191,7 +208,7 @@ export const InvestmentDialog = ({ onSuccess, editData, userId }: InvestmentDial
               Zrušit
             </Button>
             <Button type="submit">
-              Přidat investici
+              {editData ? "Uložit změny" : "Přidat investici"}
             </Button>
           </div>
         </form>

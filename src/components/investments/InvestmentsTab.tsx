@@ -141,6 +141,8 @@ export default function InvestmentsTab({ userId: viewUserId, isAdmin = false }: 
       {editingInvestment && (
         <InvestmentDialog
           editData={editingInvestment}
+          open={!!editingInvestment}
+          onOpenChange={(open) => { if (!open) setEditingInvestment(null); }}
           onSuccess={() => {
             setEditingInvestment(null);
             fetchInvestments();
