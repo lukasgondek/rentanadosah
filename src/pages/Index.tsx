@@ -13,7 +13,14 @@ import StrategyTab from "@/components/strategy/StrategyTab";
 import StrategyProspectLP from "@/components/strategy/StrategyProspectLP";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { useUserRole } from "@/hooks/useUserRole";
-import { Loader2, Lock } from "lucide-react";
+import { Loader2, Lock, User as UserIcon, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface ClientInfo {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -21,6 +28,7 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientInfo, setSelectedClientInfo] = useState<ClientInfo | null>(null);
   const { isAdmin, isProspect, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
 
@@ -60,22 +68,28 @@ const Index = () => {
     return null;
   }
 
+  const handleSelectClient = async (clientId: string | null) => {
+    setSelectedClientId(clientId);
+    if (clientId) {
+      setActiveTab("dashboard");
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, email, full_name")
+        .eq("id", clientId)
+        .single();
+      if (data) setSelectedClientInfo(data);
+    } else {
+      setSelectedClientInfo(null);
+    }
+  };
+
   const renderContent = () => {
     if (activeTab === "admin" && isAdmin) {
-      if (selectedClientId) {
-        return (
-          <div className="space-y-6">
-            <AdminDashboard onSelectClient={setSelectedClientId} selectedClientId={selectedClientId} />
-            <div className="border-t pt-6">
-              {renderClientContent(selectedClientId)}
-            </div>
-          </div>
-        );
-      }
-      return <AdminDashboard onSelectClient={setSelectedClientId} selectedClientId={selectedClientId} />;
+      return <AdminDashboard onSelectClient={handleSelectClient} selectedClientId={selectedClientId} />;
     }
 
-    return renderClientContent();
+    const viewUserId = isAdmin ? selectedClientId : null;
+    return renderClientContent(viewUserId);
   };
 
   const renderClientContent = (viewUserId?: string | null) => {
@@ -120,6 +134,27 @@ const Index = () => {
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} isProspect={isProspect}>
+      {isAdmin && selectedClientId && activeTab !== "admin" && selectedClientInfo && (
+        <div className="flex items-center justify-between gap-3 p-3 mb-4 bg-primary/5 border border-primary/20 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <UserIcon className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">
+                Prohlížíte kalkulačku: {selectedClientInfo.full_name || selectedClientInfo.email}
+              </p>
+              {selectedClientInfo.full_name && (
+                <p className="text-xs text-muted-foreground">{selectedClientInfo.email}</p>
+              )}
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => handleSelectClient(null)}>
+            <X className="h-4 w-4 mr-1" />
+            Zpět
+          </Button>
+        </div>
+      )}
       {renderContent()}
     </Layout>
   );
