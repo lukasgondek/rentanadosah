@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Target, ListChecks, MessageCircle } from "lucide-react";
+import { ArrowRight, Calendar, Target, ListChecks, MessageCircle } from "lucide-react";
 
 export default function StrategyProspectLP() {
   return (
@@ -74,12 +74,20 @@ export default function StrategyProspectLP() {
         <p className="text-lg text-muted-foreground">
           Chcete mít vlastní investiční strategii na míru?
         </p>
-        <Button size="lg" asChild className="text-base px-8">
-          <a href="https://realitnirentier.cz/vsl/zaloha" target="_blank" rel="noopener noreferrer">
-            Zjistit více
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </a>
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button size="lg" asChild className="text-base px-8">
+            <a href="https://calendar.app.google/z8hCx823SKMcfb6S8" target="_blank" rel="noopener noreferrer">
+              <Calendar className="mr-2 h-5 w-5" />
+              Rezervovat konzultaci
+            </a>
+          </Button>
+          <Button size="lg" variant="outline" asChild className="text-base px-8">
+            <a href="https://realitnirentier.cz/vsl/zaloha" target="_blank" rel="noopener noreferrer">
+              Zjistit více
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </a>
+          </Button>
+        </div>
       </div>
     </div>
   );
