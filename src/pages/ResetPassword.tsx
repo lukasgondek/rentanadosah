@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,31 +23,52 @@ const ResetPassword = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [searchParams] = useSearchParams();
+  const [ready, setReady] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user came from reset email link
-    const accessToken = searchParams.get('access_token');
-    const type = searchParams.get('type');
-    
-    if (!accessToken || type !== 'recovery') {
-      toast({
-        variant: "destructive",
-        title: "Neplatný odkaz",
-        description: "Tento odkaz není platný nebo již vypršel.",
+    // Supabase sends recovery token in URL hash fragment (#access_token=...&type=recovery)
+    // The Supabase client auto-detects this and fires PASSWORD_RECOVERY event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setReady(true);
+      }
+    });
+
+    // Also check if there's already a session (user clicked link and session was set)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setReady(true);
+      }
+    });
+
+    // Fallback: if no event fires within 3 seconds, show error
+    const timeout = setTimeout(() => {
+      setReady((current) => {
+        if (!current) {
+          toast({
+            variant: "destructive",
+            title: "Neplatný odkaz",
+            description: "Tento odkaz není platný nebo již vypršel. Zkuste si vyžádat nový.",
+          });
+          navigate("/auth");
+        }
+        return current;
       });
-      navigate("/auth");
-    }
-  }, [searchParams, navigate, toast]);
+    }, 3000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
+  }, [navigate, toast]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Validate inputs
       const validation = resetPasswordSchema.safeParse({ password, confirmPassword });
       if (!validation.success) {
         toast({
@@ -86,6 +107,19 @@ const ResetPassword = () => {
       setLoading(false);
     }
   };
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardContent className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-3 text-muted-foreground">Ověřuji odkaz...</span>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
