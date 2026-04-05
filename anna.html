@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Медийный Прорыв — Анна Тятте</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- VSL — Анна Тятте: Медийный Прорыв | realitnirentier.cz/anna -->
+<!-- Tato stránka používá page-landing.php šablonu (bez headeru/footeru) -->
+<style>
+  /* === VSL Page-Specific Styles === */
+  /* Override body for dark-deep background */
+  body.lp-page { background: #202a31 !important; }
+  /* Top bar */
+  .vsl-topbar {
+    background: #1a2228;
+    border-bottom: 1px solid rgba(208, 167, 99, 0.2);
+    padding: 12px 24px;
+    text-align: center;
+  }
+  .vsl-topbar p {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #d0a763;
+    margin: 0;
+  }
+  /* Video section */
+  .vsl-video-section {
+    background: #202a31;
+    padding: 56px 24px 64px;
+    text-align: center;
+  }
+  .vsl-video-section h1 {
+    font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+    font-size: 38px;
+    font-weight: 400;
+    line-height: 1.22;
+    color: #f8f4e6;
+    max-width: 800px;
+    margin: 0 auto 40px;
+  }
+  .vsl-video-wrapper {
+    max-width: 800px;
+    margin: 0 auto;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(208, 167, 99, 0.12);
+    position: relative;
+  }
+  .vsl-video-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: rgba(248, 244, 230, 0.35);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 16px;
+  }
+  .vsl-video-placeholder p {
+    margin: 0;
+  }
+  /* When video is embedded, iframe fills wrapper */
+  .vsl-video-wrapper iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+  /* Text / bullets section */
+  .vsl-text-section {
+    background: #f8f4e6;
+    padding: 64px 24px;
+  }
+  .vsl-text-container {
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  .vsl-text-section h2 {
+    font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+    font-size: 30px;
+    font-weight: 400;
+    color: #393e52;
+    text-align: center;
+    margin: 0 0 36px;
+  }
+  .vsl-bullets {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .vsl-bullets li {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    color: #393e52;
+  }
+  .vsl-bullets li::before {
+    content: '✓';
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: #d0a763;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 50%;
+    margin-top: 2px;
+  }
+  /* CTA section */
+  .vsl-cta-section {
+    background: #202a31;
+    padding: 64px 24px;
+    text-align: center;
+  }
+  .vsl-cta-section h2 {
+    font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+    font-size: 30px;
+    font-weight: 400;
+    color: #f8f4e6;
+    margin: 0 0 36px;
+  }
+  .vsl-cta-grid {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: stretch;
+    gap: 20px;
+    max-width: 680px;
+    margin: 0 auto 24px;
+  }
+  .vsl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 32px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    cursor: pointer;
+    flex: 1;
+    text-align: center;
+  }
+  .vsl-btn:hover {
+    transform: translateY(-2px);
+  }
+  .vsl-btn-primary {
+    background: linear-gradient(135deg, #d0a763 0%, #c49a58 100%);
+    color: #202a31;
+    border: none;
+    box-shadow: 0 4px 20px rgba(208, 167, 99, 0.35);
+  }
+  .vsl-btn-primary:hover {
+    box-shadow: 0 6px 28px rgba(208, 167, 99, 0.5);
+    background: linear-gradient(135deg, #dbb574 0%, #d0a763 100%);
+    color: #202a31;
+  }
+  .vsl-btn-secondary {
+    background: transparent;
+    color: #f8f4e6;
+    border: 2px solid rgba(248, 244, 230, 0.3);
+  }
+  .vsl-btn-secondary:hover {
+    border-color: rgba(248, 244, 230, 0.6);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    color: #f8f4e6;
+  }
+  .vsl-trust {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 13px;
+    color: rgba(248, 244, 230, 0.45);
+    margin: 0;
+    letter-spacing: 0.3px;
+  }
+  /* Footer */
+  .vsl-footer {
+    background: #1a2228;
+    border-top: 1px solid rgba(248, 244, 230, 0.08);
+    padding: 24px;
+    text-align: center;
+  }
+  .vsl-footer p {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 13px;
+    color: rgba(248, 244, 230, 0.35);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .vsl-footer a {
+    color: rgba(248, 244, 230, 0.45);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .vsl-footer a:hover {
+    color: #d0a763;
+  }
+  /* === Responsive === */
+  @media (max-width: 640px) {
+    .vsl-video-section {
+      padding: 36px 16px 44px;
+    }
+    .vsl-video-section h1 {
+      font-size: 26px;
+      margin-bottom: 28px;
+    }
+    .vsl-video-wrapper {
+      border-radius: 8px;
+    }
+    .vsl-text-section {
+      padding: 44px 16px;
+    }
+    .vsl-text-section h2 {
+      font-size: 24px;
+      margin-bottom: 28px;
+    }
+    .vsl-bullets li {
+      font-size: 15px;
+    }
+    .vsl-cta-section {
+      padding: 44px 16px;
+    }
+    .vsl-cta-section h2 {
+      font-size: 24px;
+    }
+    .vsl-cta-grid {
+      flex-direction: column;
+    }
+    .vsl-btn {
+      padding: 14px 24px;
+      font-size: 15px;
+    }
+  }
+</style>
+<div class="lp">
+
+  <!-- ====== TOP BAR ====== -->
+  <div class="vsl-topbar">
+    <p>15 лет на российском телевидении — 60 экспертов из невидимости в медиа</p>
+  </div>
+  <!-- ====== VIDEO SECTION (Dark) ====== -->
+  <section class="vsl-video-section">
+    <h1>Из Инстаграма в медиа. Из эксперта в авторитет.</h1>
+
+    <div class="vsl-video-wrapper">
+      <!-- Video embed — вложить код после съёмки -->
+      <div class="vsl-video-placeholder">
+        <p>🎬 Видео «Медийный Прорыв» — скоро появится</p>
+      </div>
+    </div>
+  </section>
+  <!-- ====== TEXT SECTION (Cream) ====== -->
+  <section class="vsl-text-section">
+    <div class="vsl-text-container">
+      <h2>Что вы узнаете из этого видео</h2>
+
+      <ul class="vsl-bullets">
+        <li>Почему 90% экспертов публикуют в пустоту — и как запустить «медийную цепную реакцию», которая приводит клиентов сама</li>
+        <li>5 шагов за 90 дней: от бренд-платформы до реальных медийных выходов (подкаст, статья, интервью)</li>
+        <li>Как я вывела более 60 экспертов из Инстаграма в российские медиа — Первый канал, MTV, Пятый канал</li>
+        <li>Медийные контакты, камерный тренинг и систему проявленности — чтобы строить авторитет повторяемо, а не случайно</li>
+      </ul>
+    </div>
+  </section>
+  <!-- ====== CTA SECTION (Dark Deep) ====== -->
+  <section class="vsl-cta-section">
+    <h2>Готовы начать?</h2>
+
+    <div class="vsl-cta-grid">
+      <a href="#calendly-placeholder" class="vsl-btn vsl-btn-primary">Забронировать звонок с Анной →</a>
+    </div>
+    <p class="vsl-trust">30 минут · Индивидуально · Только 5 экспертов одновременно</p>
+  </section>
+  <!-- ====== SUPPORT ====== -->
+  <section style="background:#0f1419;padding:18px 24px;text-align:center;border-top:1px solid rgba(248,244,230,0.05);">
+    <p style="font-size:13px;color:rgba(248,244,230,0.4);margin:0;">Что-то не работает или есть вопрос? Напишите мне: <a href="https://instagram.com/anna.tyatte" target="_blank" style="color:#d0a763;text-decoration:underline;">@anna.tyatte</a></p>
+  </section>
+  <!-- ====== FOOTER ====== -->
+  <footer class="vsl-footer">
+    <p>&copy; 2026 Анна Тятте — Медийный эксперт | <a href="https://instagram.com/anna.tyatte" target="_blank">Instagram @anna.tyatte</a></p>
+  </footer>
+</div>
+</html>
