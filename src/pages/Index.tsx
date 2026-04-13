@@ -13,7 +13,7 @@ import StrategyTab from "@/components/strategy/StrategyTab";
 import StrategyProspectLP from "@/components/strategy/StrategyProspectLP";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { useUserRole } from "@/hooks/useUserRole";
-import { Loader2, Lock, User as UserIcon, X } from "lucide-react";
+import { Loader2, User as UserIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ClientInfo {
@@ -106,23 +106,12 @@ const Index = () => {
         return <PropertiesTab userId={viewUserId} isAdmin={isAdmin} />;
       case "strategy":
         if (isProspect) {
-          return <StrategyProspectLP />;
+          return <StrategyProspectLP section="strategy" />;
         }
         return <StrategyTab userId={viewUserId} isAdmin={isAdmin} />;
       case "planning":
         if (isProspect) {
-          return (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="rounded-full bg-muted p-6 mb-4">
-                <Lock className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h2 className="text-xl font-semibold mb-2">Plánování je dostupné pouze pro klienty</h2>
-              <p className="text-muted-foreground max-w-md">
-                Tato sekce je dostupná pouze pro účastníky Akcelerátoru Realitního Rentiéra.
-                Pro přístup kontaktujte svého poradce.
-              </p>
-            </div>
-          );
+          return <StrategyProspectLP section="planning" />;
         }
         return <PlanningTab userId={viewUserId} isAdmin={isAdmin} />;
       case "emails":
