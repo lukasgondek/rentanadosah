@@ -97,7 +97,14 @@ const Auth = () => {
           });
         }
       } else if (data?.session) {
-        // Auto-confirmed — user is immediately logged in, redirect via onAuthStateChange
+        // Auto-confirmed — user is immediately logged in
+        // Notify Make.com for CRM + Ecomail sync (fire and forget)
+        fetch("https://hook.eu1.make.com/kldxd6sf5w22d9mfiy53pto6hbe77mpz", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), fullName: fullName.trim() }),
+        }).catch(() => {}); // silent — don't block registration on sync failure
+
         toast({
           title: "Úspěšná registrace!",
           description: "Přihlašujeme vás...",
