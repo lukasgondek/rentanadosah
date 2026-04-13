@@ -29,7 +29,7 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [showAccessDenied, setShowAccessDenied] = useState(false);
+  const [showAccessDenied, setShowAccessDenied] = useState(false); // kept for error handling
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [isResetting, setIsResetting] = useState(false);
@@ -69,15 +69,8 @@ const Auth = () => {
         return;
       }
 
-      // Whitelist check — only approved emails can register
-      const { data: isApproved, error: checkError } = await supabase
-        .rpc('is_email_approved', { check_email: email.trim().toLowerCase() });
-      if (checkError || !isApproved) {
-        setLoading(false);
-        setShowAccessDenied(true);
-        return;
-      }
-
+      // Registration is open — role is determined post-registration
+      // (approved email = klient, others = prospect)
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,

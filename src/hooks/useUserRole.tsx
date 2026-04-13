@@ -18,7 +18,7 @@ export const useUserRole = () => {
           return;
         }
 
-        // Check user_roles table first
+        // Check user_roles table
         const { data, error } = await supabase
           .from("user_roles")
           .select("role")
@@ -26,32 +26,39 @@ export const useUserRole = () => {
 
         if (!error && data && data.length > 0) {
           const hasAdmin = data.some((r) => r.role === "admin");
+          if (hasAdmin) {
+            setRole("admin");
+            setLoading(false);
+            return;
+          }
+
           const hasProspect = data.some((r) => r.role === "prospect");
-          setRole(hasAdmin ? "admin" : hasProspect ? "prospect" : "user");
-        } else {
-          // No role in user_roles — check approved_emails and sync
-          const userEmail = user.email?.toLowerCase();
-          if (userEmail) {
-            const { data: approvedData } = await supabase
-              .from("approved_emails")
-              .select("role")
-              .eq("email", userEmail)
-              .maybeSingle();
-
-            const resolvedRole = (approvedData?.role as UserRole) || "user";
-
-            // Sync to user_roles so we don't need to look it up again
-            await supabase
-              .from("user_roles")
-              .upsert({ user_id: user.id, role: resolvedRole }, { onConflict: "user_id" });
-
-            setRole(resolvedRole);
-          } else {
-            setRole("user");
+          if (hasProspect) {
+            setRole("prospect");
+            setLoading(false);
+            return;
           }
         }
+
+        // Role is "user" or missing — verify against approved_emails
+        // is_email_approved is SECURITY DEFINER, callable by anyone
+        const userEmail = user.email?.toLowerCase();
+        if (userEmail) {
+          const { data: isApproved } = await supabase
+            .rpc("is_email_approved", { check_email: userEmail });
+
+          if (isApproved) {
+            // Email is in approved_emails = confirmed client
+            setRole("user");
+          } else {
+            // NOT in approved_emails = prospect (open registration)
+            setRole("prospect");
+          }
+        } else {
+          setRole("prospect");
+        }
       } catch (error) {
-        setRole("user");
+        setRole("prospect");
       } finally {
         setLoading(false);
       }
