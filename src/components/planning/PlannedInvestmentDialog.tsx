@@ -26,6 +26,8 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
 
+  // Defaulty pro "obvyklé" parametry (úrok, LTV, doba, %) — uživatel je vidí předvyplněné
+  // a stačí přepsat. Cena/nájem/výdaje/úvěr/identifikátor jsou na uživateli (placeholder = příklad).
   const [formData, setFormData] = useState({
     property_identifier: editData?.property_identifier || "",
     purchase_price: editData?.purchase_price?.toString() || "",
@@ -35,9 +37,9 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     appreciation_percent: editData?.appreciation_percent?.toString() || "5",
     rent_growth_percent: editData?.rent_growth_percent?.toString() || "5",
     loan_amount: editData?.loan_amount?.toString() || "",
-    interest_rate: editData?.interest_rate?.toString() || "",
-    ltv_percent: editData?.ltv_percent?.toString() || "",
-    term_months: editData ? Math.round(editData.term_months / 12).toString() : "",
+    interest_rate: editData?.interest_rate?.toString() || "4.5",
+    ltv_percent: editData?.ltv_percent?.toString() || "80",
+    term_months: editData ? Math.round(editData.term_months / 12).toString() : "25",
   });
 
   const [currentDashboardCashflow, setCurrentDashboardCashflow] = useState(0);
