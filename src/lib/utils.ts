@@ -29,6 +29,54 @@ export function parseNum(val: string): number | undefined {
   return isNaN(num) ? undefined : num;
 }
 
+// ─── Error formatting ────────────────────────────────────────────────
+
+/**
+ * Convert a Supabase/PostgREST error into a human-readable Czech message.
+ * Maps common Postgres error codes; falls back to error.message + code.
+ *
+ * Usage:
+ *   const { error } = await supabase.from("x").insert(...);
+ *   if (error) toast({ description: formatSupabaseError(error) });
+ */
+export function formatSupabaseError(error: unknown): string {
+  if (!error) return "Neznámá chyba";
+
+  const e = error as { code?: string; message?: string; details?: string; hint?: string };
+  const code = e.code || "";
+  const message = e.message || "";
+  const details = e.details || "";
+
+  // Extract column name from messages like: 'null value in column "ltv_percent"'
+  const colMatch = (message + " " + details).match(/column "([^"]+)"/);
+  const column = colMatch?.[1];
+
+  switch (code) {
+    case "23505":
+      return `Záznam už existuje (duplicita)${column ? ` v poli "${column}"` : ""} [${code}]`;
+    case "23502":
+      return `Chybí povinné pole${column ? `: "${column}"` : ""} [${code}]`;
+    case "23503":
+      return `Odkaz na neexistující záznam${column ? ` (pole "${column}")` : ""} [${code}]`;
+    case "23514":
+      return `Hodnota nesplňuje pravidlo databáze${column ? ` (pole "${column}")` : ""} [${code}]`;
+    case "42501":
+    case "PGRST301":
+      return `Nemáte oprávnění k této operaci (RLS policy) [${code}]`;
+    case "PGRST116":
+      return `Žádný odpovídající záznam nenalezen [${code}]`;
+    case "PGRST204":
+      return `Sloupec v databázi neexistuje${column ? `: "${column}"` : ""} [${code}]`;
+    case "22P02":
+      return `Neplatný formát hodnoty${column ? ` v poli "${column}"` : ""} [${code}]`;
+    default:
+      // Fallback: show raw message + code (anglicky, ale aspoň něco konkrétního)
+      const tail = code ? ` [${code}]` : "";
+      if (message) return `${message}${tail}`;
+      return `Chyba databáze${tail}`;
+  }
+}
+
 // ─── Financial calculations ──────────────────────────────────────────
 
 /**

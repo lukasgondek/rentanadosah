@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Search, Trash2, User, Plus, UserCheck, UserX, Users } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { z } from "zod";
+import { formatSupabaseError } from "@/lib/utils";
 
 type AppRole = "user" | "prospect";
 type FilterRole = "all" | "user" | "prospect";
@@ -17,9 +18,11 @@ type FilterRole = "all" | "user" | "prospect";
 interface PersonEntry {
   email: string;
   role: AppRole;
-  approvedEmailId: string;
+  /** null = self-registered (po zrušení whitelistu), nemá záznam v approved_emails */
+  approvedEmailId: string | null;
   notes: string | null;
-  approvedAt: string;
+  /** null pro self-registered */
+  approvedAt: string | null;
   profileId: string | null;
   fullName: string | null;
   registeredAt: string | null;
@@ -73,24 +76,28 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
 
   const fetchPeople = async () => {
     try {
-      // Fetch both sources
-      const [emailsRes, profilesRes] = await Promise.all([
+      // Fetch all 3 sources in parallel
+      const [emailsRes, profilesRes, rolesRes] = await Promise.all([
         supabase.from("approved_emails").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("*"),
+        supabase.from("user_roles").select("*"),
       ]);
 
       if (emailsRes.error) throw emailsRes.error;
       if (profilesRes.error) throw profilesRes.error;
+      if (rolesRes.error) throw rolesRes.error;
 
       const emails = emailsRes.data || [];
       const profiles = profilesRes.data || [];
+      const roles = rolesRes.data || [];
 
-      // Create a map of profiles by email for fast lookup
-      const profileMap = new Map(profiles.map((p) => [p.email.toLowerCase(), p]));
+      // Lookup maps
+      const profileByEmail = new Map(profiles.map((p) => [p.email.toLowerCase(), p]));
+      const roleByUserId = new Map(roles.map((r) => [r.user_id, r.role as AppRole]));
 
-      // Build unified list from approved_emails
+      // 1) Záznamy z approved_emails (tradiční whitelist + match na profile)
       const merged: PersonEntry[] = emails.map((ae) => {
-        const profile = profileMap.get(ae.email.toLowerCase());
+        const profile = profileByEmail.get(ae.email.toLowerCase());
         return {
           email: ae.email,
           role: ae.role as AppRole,
@@ -103,11 +110,29 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
         };
       });
 
-      setPeople(merged);
+      // 2) Self-registered profile, které NEJSOU v approved_emails (po zrušení whitelistu)
+      const approvedEmailsLower = new Set(emails.map((ae) => ae.email.toLowerCase()));
+      const selfRegistered: PersonEntry[] = profiles
+        .filter((p) => !approvedEmailsLower.has(p.email.toLowerCase()))
+        .map((p) => ({
+          email: p.email,
+          role: roleByUserId.get(p.id) || "prospect",
+          approvedEmailId: null,
+          notes: null,
+          approvedAt: null,
+          profileId: p.id,
+          fullName: p.full_name || null,
+          registeredAt: p.created_at || null,
+        }));
+
+      // Seřadit self-registered podle data registrace (nejnovější nahoře), pak append k approved
+      selfRegistered.sort((a, b) => (b.registeredAt || "").localeCompare(a.registeredAt || ""));
+
+      setPeople([...merged, ...selfRegistered]);
     } catch (error) {
       toast({
-        title: "Chyba",
-        description: "Nepodařilo se načíst seznam přístupů",
+        title: "Nepodařilo se načíst seznam přístupů",
+        description: formatSupabaseError(error),
         variant: "destructive",
       });
     } finally {
@@ -137,11 +162,11 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
       });
 
       if (error) {
-        if (error.code === "23505") {
-          toast({ variant: "destructive", title: "Email již existuje", description: "Tento email je již v seznamu." });
-        } else {
-          throw error;
-        }
+        toast({
+          variant: "destructive",
+          title: error.code === "23505" ? "Email již existuje" : "Nepodařilo se přidat email",
+          description: error.code === "23505" ? "Tento email je již v seznamu." : formatSupabaseError(error),
+        });
       } else {
         toast({ title: "Přístup přidán", description: `${newEmail} přidán jako ${newRole === "prospect" ? "zájemce" : "klient"}.` });
         setNewEmail("");
@@ -151,7 +176,7 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
         fetchPeople();
       }
     } catch (error) {
-      toast({ variant: "destructive", title: "Chyba", description: "Nepodařilo se přidat email." });
+      toast({ variant: "destructive", title: "Nepodařilo se přidat email", description: formatSupabaseError(error) });
     } finally {
       setAdding(false);
     }
@@ -159,19 +184,31 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
 
   const handleRoleChange = async (person: PersonEntry, newRoleVal: AppRole) => {
     try {
-      // Update approved_emails
-      const { error } = await supabase
-        .from("approved_emails")
-        .update({ role: newRoleVal })
-        .eq("id", person.approvedEmailId);
+      // Pro self-registered (approvedEmailId = null) vytvoř záznam v approved_emails,
+      // ať příště admin uvidí standardní řádek a evidence je konzistentní.
+      if (person.approvedEmailId) {
+        const { error } = await supabase
+          .from("approved_emails")
+          .update({ role: newRoleVal })
+          .eq("id", person.approvedEmailId);
+        if (error) throw error;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from("approved_emails").insert({
+          email: person.email.toLowerCase(),
+          role: newRoleVal,
+          approved_by: user?.id,
+          notes: "Auto-přidáno při změně role self-registered uživatele",
+        });
+        if (error) throw error;
+      }
 
-      if (error) throw error;
-
-      // Update user_roles if registered
+      // Update user_roles, pokud je uživatel zaregistrován
       if (person.profileId) {
-        await supabase
+        const { error: roleErr } = await supabase
           .from("user_roles")
           .upsert({ user_id: person.profileId, role: newRoleVal }, { onConflict: "user_id" });
+        if (roleErr) throw roleErr;
       }
 
       toast({
@@ -180,7 +217,7 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
       });
       fetchPeople();
     } catch (error) {
-      toast({ variant: "destructive", title: "Chyba", description: "Nepodařilo se změnit roli." });
+      toast({ variant: "destructive", title: "Nepodařilo se změnit roli", description: formatSupabaseError(error) });
     }
   };
 
@@ -208,8 +245,10 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
         await supabase.from("profiles").delete().eq("id", person.profileId);
       }
 
-      // Delete approved email
-      await supabase.from("approved_emails").delete().eq("id", person.approvedEmailId);
+      // Smazat approved_email jen pokud existuje (self-registered ho nemá)
+      if (person.approvedEmailId) {
+        await supabase.from("approved_emails").delete().eq("id", person.approvedEmailId);
+      }
 
       toast({
         title: "Přístup odebrán",
@@ -219,7 +258,7 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
       if (selectedClientId === person.profileId) onSelectClient(null);
       fetchPeople();
     } catch (error) {
-      toast({ variant: "destructive", title: "Chyba", description: "Nepodařilo se smazat přístup." });
+      toast({ variant: "destructive", title: "Nepodařilo se smazat přístup", description: formatSupabaseError(error) });
     }
   };
 
@@ -360,7 +399,7 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
 
               <div className="grid gap-3">
                 {filteredPeople.map((person) => (
-                  <Card key={person.approvedEmailId} className="hover:bg-accent/50 transition-colors">
+                  <Card key={person.approvedEmailId ?? `self-${person.profileId}`} className="hover:bg-accent/50 transition-colors">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -378,6 +417,11 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
                               {!person.profileId && (
                                 <Badge variant="outline" className="text-muted-foreground">
                                   Neregistrován
+                                </Badge>
+                              )}
+                              {person.profileId && !person.approvedEmailId && (
+                                <Badge variant="outline" className="border-blue-300 text-blue-700">
+                                  Sám se registroval
                                 </Badge>
                               )}
                             </div>

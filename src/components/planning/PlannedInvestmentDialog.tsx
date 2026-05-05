@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { formatNumber as fmtNum, calculateAnnuity } from "@/lib/utils";
+import { formatNumber as fmtNum, calculateAnnuity, formatSupabaseError } from "@/lib/utils";
 
 /** Safely parse a numeric input value — returns undefined for empty/NaN */
 const parseNum = (val: string): number | undefined => {
@@ -218,6 +218,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       return;
     }
 
+    // LTV auto-dopočet když uživatel nevyplnil (DB sloupec je NOT NULL)
+    const ltvInput = parseNum(formData.ltv_percent);
+    const ltvComputed = estimatedValue > 0 ? (loanAmount / estimatedValue) * 100 : 0;
+
     const dataToSave = {
       user_id: userId || user.id,
       property_identifier: formData.property_identifier.trim(),
@@ -229,7 +233,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       rent_growth_percent: parseNum(formData.rent_growth_percent) ?? 5,
       loan_amount: loanAmount,
       interest_rate: interestRate,
-      ltv_percent: parseNum(formData.ltv_percent) ?? null,
+      ltv_percent: ltvInput ?? ltvComputed,
       term_months: termYears * 12,
     };
 
@@ -241,9 +245,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     }
 
     if (error) {
+      const action = editData ? "upravit" : "přidat";
       toast({
-        title: "Chyba",
-        description: editData ? "Nepodařilo se upravit plánovanou investici" : "Nepodařilo se přidat plánovanou investici",
+        title: `Nepodařilo se ${action} plánovanou investici`,
+        description: formatSupabaseError(error),
         variant: "destructive",
       });
       return;
