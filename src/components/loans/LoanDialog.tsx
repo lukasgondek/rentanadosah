@@ -194,6 +194,25 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
     }
   }, [formData.original_amount, formData.interest_rate, formData.term_months, isPaymentManual]);
 
+  // Rozpad hypoteční platby — stejná logika jako "Údaje o úvěru" v plánovacím
+  // módu. Měsíční úrok = úrok z celé jistiny v 1. měsíci. Průměrný měsíční úrok
+  // za celou dobu je nižší (úrok klesá jak se jistina splácí):
+  // Σ úroků = splátka×měsíce − jistina; průměr = Σ / měsíce.
+  const loanCalc = (() => {
+    const loanAmount = parseNum(formData.original_amount) || 0;
+    const ratePct = parseNum(formData.interest_rate) ?? 0;
+    const termMonths = (parseNum(formData.term_months) || 0) * 12;
+    const monthlyRate = ratePct / 100 / 12;
+    const effectivePayment = parseNum(formData.monthly_payment) || 0;
+    const monthlyInterest = loanAmount * monthlyRate;
+    const principalPayment = effectivePayment > 0 ? effectivePayment - monthlyInterest : 0;
+    const avgMonthlyInterest =
+      termMonths > 0 && effectivePayment > 0
+        ? (effectivePayment * termMonths - loanAmount) / termMonths
+        : 0;
+    return { monthlyInterest, principalPayment, avgMonthlyInterest };
+  })();
+
   const addCollateral = () => {
     setCollaterals([...collaterals, { sourceId: "", sourceType: "", amount: "", label: "" }]);
     // Zajištěný úvěr musí mít LTV — předvyplň 80 %, klient může změnit.
@@ -224,11 +243,6 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
     setCollaterals(newCollaterals);
   };
 
-  const updateCollateralAmount = (index: number, amount: string) => {
-    const newCollaterals = [...collaterals];
-    newCollaterals[index] = { ...newCollaterals[index], amount };
-    setCollaterals(newCollaterals);
-  };
 
   // C2: editace polí nové nemovitosti přímo v řádku zástavy
   const updateCollateralNewProp = (index: number, field: keyof NewPropFields, value: string) => {
@@ -255,13 +269,16 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
     const remaining = parseNum(formData.remaining_principal);
     const rate = parseNum(formData.interest_rate);
     const termYears = parseNum(formData.term_months);
-    const payment = parseNum(formData.monthly_payment);
-
     if (!amount || amount <= 0) { showError("Vyplňte původní výši úvěru"); return; }
     if (remaining === undefined || remaining < 0) { showError("Vyplňte zbývající dluh"); return; }
     if (rate === undefined || rate < 0) { showError("Vyplňte úrokovou sazbu"); return; }
     if (!termYears || termYears <= 0) { showError("Vyplňte dobu splácení"); return; }
-    if (!payment || payment <= 0) { showError("Vyplňte měsíční splátku"); return; }
+
+    // Měsíční splátka není povinná — když ji uživatel nevyplní, dopočítáme
+    // anuitu z výše úvěru, sazby a doby (DB sloupec je NOT NULL).
+    const payment =
+      parseNum(formData.monthly_payment) ??
+      Math.round(calculateAnnuity(amount, rate, termYears * 12));
 
     // C2: validace nových nemovitostí (vytvoří se do portfolia)
     for (const c of collaterals) {
@@ -386,16 +403,18 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
       // Also clear old property.loan_id links (backwards compat)
       await supabase.from("properties").update({ loan_id: null }).eq("loan_id", loanId);
 
-      // Insert new collateral records (jen property/unit — ruční zástava jde do collateral_location)
+      // Insert new collateral records (jen property/unit). Pole "výše zástavy"
+      // už není — částku odvozujeme z výše úvěru (collateral_amount slouží jen
+      // informativně, volná zástava se počítá z jistiny/LTV úvěru).
       const collateralRecords = resolved
-        .filter((c) => c.sourceId && (c.sourceType === "property" || c.sourceType === "unit") && (parseNum(c.amount) || 0) > 0)
+        .filter((c) => c.sourceId && (c.sourceType === "property" || c.sourceType === "unit"))
         .map((c) => {
           const realId = c.sourceId.replace(/^(prop_|unit_)/, "");
           return {
             loan_id: loanId!,
             property_id: c.sourceType === "property" ? realId : null,
             property_unit_id: c.sourceType === "unit" ? realId : null,
-            collateral_amount: parseNum(c.amount) || 0,
+            collateral_amount: parseNum(c.amount) || amount,
           };
         });
 
@@ -485,13 +504,13 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Měsíční splátka (Kč)</Label>
+              <Label>Měsíční splátka (Kč) <span className="text-muted-foreground font-normal">— dopočítá se sama</span></Label>
               <FormattedNumberInput value={formData.monthly_payment}
                 onValueChange={(v) => {
                   setIsPaymentManual(true);
                   setFormData({ ...formData, monthly_payment: v });
                 }}
-                placeholder="18.000" required />
+                placeholder="18.000" />
               {!isPaymentManual && formData.monthly_payment && (
                 <p className="text-xs text-muted-foreground">
                   Automatický výpočet ({formatNumber(parseNum(formData.monthly_payment) || 0)} Kč). Můžete přepsat.
@@ -503,10 +522,26 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
               )}
             </div>
             <div className="space-y-2">
-              <Label>LTV (%) <span className="text-muted-foreground font-normal">— nepovinné</span></Label>
+              <Label>LTV (%)</Label>
               <Input type="number" step="0.01" value={formData.ltv_percent}
                 onChange={(e) => setFormData({ ...formData, ltv_percent: e.target.value })}
-                placeholder="75" />
+                placeholder="80" />
+            </div>
+          </div>
+
+          {/* Rozpad splátky — počítá se automaticky (jako v plánovacím módu) */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Měsíční úrok — 1. měsíc (Kč)</Label>
+              <Input value={formatNumber(loanCalc.monthlyInterest)} disabled className="bg-muted" />
+            </div>
+            <div className="space-y-2">
+              <Label>Splátka jistiny (Kč)</Label>
+              <Input value={formatNumber(loanCalc.principalPayment)} disabled className="bg-muted" />
+            </div>
+            <div className="space-y-2">
+              <Label>Průměrný měsíční úrok — celá doba (Kč)</Label>
+              <Input value={formatNumber(loanCalc.avgMonthlyInterest)} disabled className="bg-muted" />
             </div>
           </div>
 
@@ -593,13 +628,6 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
                     </div>
                   </div>
                 )}
-
-                <div className="space-y-1">
-                  <Label className="text-xs">Výše zástavy (Kč)</Label>
-                  <FormattedNumberInput value={col.amount}
-                    onValueChange={(v) => updateCollateralAmount(idx, v)}
-                    placeholder="3.000.000" className="h-8 text-sm" />
-                </div>
               </div>
             ))}
           </div>

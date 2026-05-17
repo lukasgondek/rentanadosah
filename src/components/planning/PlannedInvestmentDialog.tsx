@@ -49,6 +49,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     monthly_payment: 0,
     monthly_interest: 0,
     principal_payment: 0,
+    avg_monthly_interest: 0,
     net_annual_rent_profit: 0,
     annual_appreciation_profit: 0,
     net_annual_profit: 0,
@@ -110,9 +111,17 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / (Math.pow(1 + monthlyRate, termMonths) - 1);
     }
 
-    // Monthly interest and principal
+    // Monthly interest and principal (první měsíc — úrok z celé jistiny)
     const monthlyInterest = loanAmount * monthlyRate;
     const principalPayment = monthlyPayment - monthlyInterest;
+
+    // Průměrný měsíční úrok za celou dobu úvěru — úrok klesá jak se splácí
+    // jistina, takže celoživotní průměr je nižší než úrok v prvním měsíci.
+    // Σ úroků = (splátka × počet měsíců) − jistina; průměr = Σ / počet měsíců.
+    const avgMonthlyInterest =
+      termMonths > 0 && monthlyPayment > 0
+        ? (monthlyPayment * termMonths - loanAmount) / termMonths
+        : 0;
 
     // Net annual rent profit (cashflow - interest)
     const netAnnualRentProfit = (cashflow * 12) - (monthlyInterest * 12);
@@ -175,6 +184,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       monthly_payment: monthlyPayment,
       monthly_interest: monthlyInterest,
       principal_payment: principalPayment,
+      avg_monthly_interest: avgMonthlyInterest,
       net_annual_rent_profit: netAnnualRentProfit,
       annual_appreciation_profit: annualAppreciationProfit,
       net_annual_profit: netAnnualProfit,
@@ -415,7 +425,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>LTV (%) <span className="text-muted-foreground font-normal">— nepovinné</span></Label>
+                <Label>LTV (%)</Label>
                 <Input
                   type="number"
                   step="0.1"
@@ -436,7 +446,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Měsíční splátka (Kč)</Label>
                 <Input
@@ -446,7 +456,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                 />
               </div>
               <div className="space-y-2">
-                <Label>Měsíční úrok (Kč)</Label>
+                <Label>Měsíční úrok — 1. měsíc (Kč)</Label>
                 <Input
                   value={formatNumber(calculations.monthly_interest)}
                   disabled
@@ -457,6 +467,14 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                 <Label>Splátka jistiny (Kč)</Label>
                 <Input
                   value={formatNumber(calculations.principal_payment)}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Průměrný měsíční úrok — celá doba (Kč)</Label>
+                <Input
+                  value={formatNumber(calculations.avg_monthly_interest)}
                   disabled
                   className="bg-muted"
                 />
