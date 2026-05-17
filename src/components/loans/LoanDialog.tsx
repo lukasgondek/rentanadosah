@@ -41,8 +41,8 @@ const emptyNewProp = (): NewPropFields => ({
 });
 
 interface CollateralEntry {
-  sourceId: string; // property_id or unit_id or "" for manual/new
-  sourceType: "property" | "unit" | "manual" | "new";
+  sourceId: string; // property_id or unit_id; "" dokud uživatel nevybere
+  sourceType: "property" | "unit" | "new" | "";
   amount: string;
   label: string; // for display
   /** vyplněno jen když sourceType === "new" — nová nemovitost se vytvoří do portfolia */
@@ -61,7 +61,6 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
   const [isPaymentManual, setIsPaymentManual] = useState(!!editData?.monthly_payment);
   const [collateralOptions, setCollateralOptions] = useState<CollateralOption[]>([]);
   const [collaterals, setCollaterals] = useState<CollateralEntry[]>([]);
-  const [manualCollateral, setManualCollateral] = useState(editData?.collateral_location || "");
 
   const [formData, setFormData] = useState({
     name: editData?.name || "",
@@ -171,15 +170,12 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
             }
             return {
               sourceId: "",
-              sourceType: "manual" as const,
+              sourceType: "" as const,
               amount: c.collateral_amount?.toString() || "",
               label: "",
             };
           });
           setCollaterals(loaded);
-        } else if (editData?.collateral_location) {
-          // Legacy: use collateral_location text
-          setManualCollateral(editData.collateral_location);
         }
       }
     };
@@ -199,7 +195,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
   }, [formData.original_amount, formData.interest_rate, formData.term_months, isPaymentManual]);
 
   const addCollateral = () => {
-    setCollaterals([...collaterals, { sourceId: "", sourceType: "manual", amount: "", label: "" }]);
+    setCollaterals([...collaterals, { sourceId: "", sourceType: "", amount: "", label: "" }]);
   };
 
   const removeCollateral = (index: number) => {
@@ -208,9 +204,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
 
   const updateCollateral = (index: number, sourceId: string) => {
     const newCollaterals = [...collaterals];
-    if (sourceId === "manual") {
-      newCollaterals[index] = { ...newCollaterals[index], sourceId: "", sourceType: "manual", label: "", newProp: undefined };
-    } else if (sourceId === "new") {
+    if (sourceId === "new") {
       newCollaterals[index] = { ...newCollaterals[index], sourceId: "", sourceType: "new", label: "", newProp: emptyNewProp() };
     } else {
       const opt = collateralOptions.find((o) => o.id === sourceId);
@@ -231,13 +225,6 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
   const updateCollateralAmount = (index: number, amount: string) => {
     const newCollaterals = [...collaterals];
     newCollaterals[index] = { ...newCollaterals[index], amount };
-    setCollaterals(newCollaterals);
-  };
-
-  // C1: ruční zástava — uživatel píše vlastní popis (label jde do collateral_location)
-  const updateCollateralLabel = (index: number, label: string) => {
-    const newCollaterals = [...collaterals];
-    newCollaterals[index] = { ...newCollaterals[index], label };
     setCollaterals(newCollaterals);
   };
 
@@ -294,9 +281,9 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
     }
     const targetUserId = userId || user.id;
 
-    // Build collateral location string for display
+    // Build collateral location string for display (z vybraných/nových nemovitostí)
     const collateralLabels = collaterals
-      .filter((c) => c.sourceId || c.label)
+      .filter((c) => c.label)
       .map((c) => c.label)
       .join(", ");
 
@@ -309,7 +296,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
       term_months: termYears * 12,
       monthly_payment: payment,
       ltv_percent: parseNum(formData.ltv_percent) ?? null,
-      collateral_location: collateralLabels || manualCollateral || null,
+      collateral_location: collateralLabels || null,
       bank_name: formData.bank_name || null,
       is_forecast: false,
     };
@@ -426,7 +413,6 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
       ltv_percent: "", bank_name: "",
     });
     setCollaterals([]);
-    setManualCollateral("");
     setOpen(false);
     onSuccess();
   };
@@ -530,22 +516,11 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
               </Button>
             </div>
 
-            {collaterals.length === 0 && (
-              <div className="space-y-2">
-                <Input
-                  value={manualCollateral}
-                  onChange={(e) => setManualCollateral(e.target.value)}
-                  placeholder="Umístění zástavy (nepovinné) nebo přidejte zástavu tlačítkem výše"
-                  className="text-sm"
-                />
-              </div>
-            )}
-
             {collaterals.map((col, idx) => (
               <div key={idx} className="border rounded-lg p-3 space-y-2 bg-muted/30">
                 <div className="flex items-center gap-2">
                   <Select
-                    value={col.sourceType === "new" ? "new" : (col.sourceId || "manual")}
+                    value={col.sourceType === "new" ? "new" : (col.sourceId || undefined)}
                     onValueChange={(v) => updateCollateral(idx, v)}
                   >
                     <SelectTrigger className="flex-1 h-8 text-sm">
@@ -558,7 +533,6 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
                         </SelectItem>
                       ))}
                       <SelectItem value="new">➕ Nová nemovitost (přidá se do portfolia)</SelectItem>
-                      <SelectItem value="manual">Jiná (ruční zápis)</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button type="button" variant="ghost" size="sm"
@@ -567,19 +541,6 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-
-                {/* C1: ruční zápis zástavy */}
-                {col.sourceType === "manual" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Popis zástavy</Label>
-                    <Input
-                      value={col.label}
-                      onChange={(e) => updateCollateralLabel(idx, e.target.value)}
-                      placeholder="Např. Byt Praha 5, ul. Plzeňská"
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                )}
 
                 {/* C2: nová nemovitost — vytvoří se do portfolia klienta */}
                 {col.sourceType === "new" && col.newProp && (
