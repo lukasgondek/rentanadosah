@@ -89,58 +89,28 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
         .eq("user_id", targetUserId)
         .order("created_at", { ascending: false });
 
-      const options: CollateralOption[] = [];
-
-      for (const p of props || []) {
-        if (p.property_type === "single" || !p.property_type) {
-          // Single unit property — available as collateral
-          options.push({
-            id: `prop_${p.id}`,
-            label: p.identifier,
-            estimatedValue: p.estimated_value,
-            type: "property",
-          });
-        }
-        // For multi-unit: whole building as collateral option
-        options.push({
-          id: `prop_${p.id}`,
-          label: p.property_type === "multi" ? `${p.identifier} (celá nemovitost)` : p.identifier,
-          estimatedValue: p.estimated_value,
-          type: "property",
-        });
-      }
-
-      // Fetch cadastrally separated units — jen z nemovitostí tohoto klienta
-      // (property_units nemá user_id, scope řešíme přes property_id klienta)
-      const propIds = (props || []).map((p) => p.id);
-      const { data: units } = propIds.length
-        ? await supabase
-            .from("property_units")
-            .select("id, name, estimated_value, property_id, is_cadastrally_separated")
-            .eq("is_cadastrally_separated", true)
-            .in("property_id", propIds)
-        : { data: [] as any[] };
-
-      for (const u of units || []) {
-        if (u.estimated_value) {
-          const parentProp = (props || []).find((p: any) => p.id === u.property_id);
-          const parentLabel = parentProp?.identifier || "";
-          options.push({
-            id: `unit_${u.id}`,
-            label: `${parentLabel} → ${u.name}`,
-            estimatedValue: u.estimated_value,
-            type: "unit",
-          });
-        }
-      }
-
-      // Deduplicate: for single properties, they got added twice (once as single, once as generic)
-      // Fix: only add multi-unit properties as "celá nemovitost"
-      const deduped = options.filter((opt, idx, arr) => {
-        return arr.findIndex((o) => o.id === opt.id && o.label === opt.label) === idx;
-      });
+      // Zástava = nemovitost jako JEDEN záznam (samostatná jednotka i činžák).
+      // Byty/jednotky se nelistují zvlášť — jsou součástí činžáku.
+      const deduped: CollateralOption[] = (props || []).map((p) => ({
+        id: `prop_${p.id}`,
+        label: p.identifier,
+        estimatedValue: p.estimated_value,
+        type: "property" as const,
+      }));
 
       setCollateralOptions(deduped);
+
+      // Legacy: zástava uložená na jednotce → namapuj na rodičovskou nemovitost
+      // (lookup unit_id → property_id, jednotky se ale v nabídce nezobrazují).
+      const propIds = (props || []).map((p) => p.id);
+      let unitParent: Record<string, string> = {};
+      if (editData?.id && propIds.length) {
+        const { data: units } = await supabase
+          .from("property_units")
+          .select("id, property_id")
+          .in("property_id", propIds);
+        unitParent = Object.fromEntries((units || []).map((u: any) => [u.id, u.property_id]));
+      }
 
       // Load existing collaterals if editing
       if (editData?.id) {
@@ -151,18 +121,12 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
 
         if (existingCollaterals && existingCollaterals.length > 0) {
           const loaded: CollateralEntry[] = existingCollaterals.map((c: any) => {
-            if (c.property_unit_id) {
-              const opt = deduped.find((o) => o.id === `unit_${c.property_unit_id}`);
+            // Jednotka → rodičovská nemovitost (byty jsou uvnitř činžáku)
+            const propId = c.property_id || (c.property_unit_id ? unitParent[c.property_unit_id] : null);
+            if (propId) {
+              const opt = deduped.find((o) => o.id === `prop_${propId}`);
               return {
-                sourceId: `unit_${c.property_unit_id}`,
-                sourceType: "unit" as const,
-                amount: c.collateral_amount?.toString() || "",
-                label: opt?.label || "Jednotka",
-              };
-            } else if (c.property_id) {
-              const opt = deduped.find((o) => o.id === `prop_${c.property_id}`);
-              return {
-                sourceId: `prop_${c.property_id}`,
+                sourceId: `prop_${propId}`,
                 sourceType: "property" as const,
                 amount: c.collateral_amount?.toString() || "",
                 label: opt?.label || "Nemovitost",
