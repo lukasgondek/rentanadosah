@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -43,6 +44,9 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   });
 
   const [currentDashboardCashflow, setCurrentDashboardCashflow] = useState(0);
+  // Refinancování: vybrané úvěry "zmizí" → jejich splátka se vrátí do cashflow
+  const [availableLoans, setAvailableLoans] = useState<any[]>([]);
+  const [refinancedLoanIds, setRefinancedLoanIds] = useState<string[]>([]);
 
   const [calculations, setCalculations] = useState({
     cashflow: 0,
@@ -71,18 +75,20 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     const fetchCashflow = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const targetId = userId || user.id;
 
       // Parallel fetch income, expenses, loans
       const [incomeRes, expensesRes, loansRes] = await Promise.all([
-        supabase.from("income_sources").select("monthly_amount").eq("user_id", user.id),
-        supabase.from("expenses").select("amount").eq("user_id", user.id),
-        supabase.from("loans").select("monthly_payment").eq("user_id", user.id).eq("is_forecast", false),
+        supabase.from("income_sources").select("monthly_amount").eq("user_id", targetId),
+        supabase.from("expenses").select("amount").eq("user_id", targetId),
+        supabase.from("loans").select("id, name, monthly_payment").eq("user_id", targetId).eq("is_forecast", false),
       ]);
 
       const totalIncome = (incomeRes.data || []).reduce((sum, i) => sum + (i.monthly_amount || 0), 0);
       const totalExpenses = (expensesRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
       const totalLoanPayments = (loansRes.data || []).reduce((sum, l) => sum + (l.monthly_payment || 0), 0);
 
+      setAvailableLoans(loansRes.data || []);
       setCurrentDashboardCashflow(totalIncome - totalExpenses - totalLoanPayments);
     };
     fetchCashflow();
@@ -173,8 +179,15 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       profit10Years += yearCashflow - yearlyInterest + yearAppreciation;
     }
 
+    // Refinancované úvěry zmizí → jejich splátka už cashflow nezatěžuje.
+    // currentDashboardCashflow má všechny splátky odečtené, proto je vrátíme.
+    const refinancedPayments = availableLoans
+      .filter((l) => refinancedLoanIds.includes(l.id))
+      .reduce((sum, l) => sum + (l.monthly_payment || 0), 0);
+
     const currentCashflowImpact = cashflow - monthlyPayment;
-    const cashflowAfterTransaction = currentDashboardCashflow + currentCashflowImpact;
+    const cashflowAfterTransaction =
+      currentDashboardCashflow + currentCashflowImpact + refinancedPayments;
 
     // Cash remaining: when loan > purchase price
     const cashRemaining = loanAmount > purchasePrice ? loanAmount - purchasePrice : 0;
@@ -194,7 +207,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       cashflow_after_transaction: cashflowAfterTransaction,
       cash_remaining: cashRemaining,
     });
-  }, [formData, currentDashboardCashflow]);
+  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,6 +297,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       ltv_percent: "",
       term_months: "",
     });
+    setRefinancedLoanIds([]);
     setOpen(false);
     onSuccess();
   };
@@ -481,6 +495,35 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
               </div>
             </div>
           </div>
+
+          {/* Refinancovat úvěr */}
+          {availableLoans.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <h3 className="font-semibold text-lg">Refinancovat úvěr</h3>
+              <p className="text-xs text-muted-foreground">
+                Vybrané úvěry se v rámci této transakce „nahradí" — jejich měsíční
+                splátka přestane zatěžovat cashflow (promítne se do plánovaných čísel).
+              </p>
+              <div className="space-y-1.5 rounded-md border p-3">
+                {availableLoans.map((loan) => (
+                  <div key={loan.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`refi-${loan.id}`}
+                      checked={refinancedLoanIds.includes(loan.id)}
+                      onCheckedChange={(c) =>
+                        setRefinancedLoanIds((prev) =>
+                          c ? [...prev, loan.id] : prev.filter((x) => x !== loan.id)
+                        )
+                      }
+                    />
+                    <Label htmlFor={`refi-${loan.id}`} className="text-sm font-normal cursor-pointer">
+                      {loan.name || "Úvěr"} (splátka {formatNumber(loan.monthly_payment || 0)} Kč/měs)
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Calculated Results */}
           <div className="space-y-4 border-t pt-4 bg-muted/30 p-4 rounded-lg">
