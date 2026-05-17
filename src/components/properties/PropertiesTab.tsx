@@ -33,7 +33,33 @@ export default function PropertiesTab({ userId: viewUserId, isAdmin = false }: {
       return;
     }
 
-    setProperties(data || []);
+    const props = data || [];
+
+    // Volná zástava = odhadní cena − Σ(zbývající jistina ÷ LTV) přes úvěry
+    // zajištěné touto nemovitostí. LTV default 80 % když chybí.
+    const propIds = props.map((p: any) => p.id);
+    const consumedByProp: Record<string, number> = {};
+    if (propIds.length > 0) {
+      const { data: lc } = await supabase
+        .from("loan_collaterals")
+        .select("property_id, loan:loans(remaining_principal, ltv_percent)")
+        .in("property_id", propIds);
+      for (const row of lc || []) {
+        const loan: any = (row as any).loan;
+        const pid = (row as any).property_id;
+        if (!loan || !pid) continue;
+        const ltv = (loan.ltv_percent ?? 80) / 100;
+        const consumed = ltv > 0 ? (loan.remaining_principal || 0) / ltv : (loan.remaining_principal || 0);
+        consumedByProp[pid] = (consumedByProp[pid] || 0) + consumed;
+      }
+    }
+
+    setProperties(
+      props.map((p: any) => ({
+        ...p,
+        free_collateral: Math.max(0, (p.estimated_value || 0) - (consumedByProp[p.id] || 0)),
+      }))
+    );
   };
 
   useEffect(() => {
@@ -82,7 +108,7 @@ export default function PropertiesTab({ userId: viewUserId, isAdmin = false }: {
               <TableHead className="text-right">Odhadní hodnota (Kč)</TableHead>
               <TableHead className="text-right">Měsíční nájem (Kč)</TableHead>
               <TableHead className="text-right">Měsíční náklady (Kč)</TableHead>
-              <TableHead className="text-right">Roční růst (%)</TableHead>
+              <TableHead className="text-right">Volná zástava (Kč)</TableHead>
               <TableHead>Úvěr</TableHead>
               <TableHead className="text-right">Akce</TableHead>
             </TableRow>
@@ -114,7 +140,7 @@ export default function PropertiesTab({ userId: viewUserId, isAdmin = false }: {
                   <TableCell className="text-right">{formatNumber(property.estimated_value)}</TableCell>
                   <TableCell className="text-right">{formatNumber(property.monthly_rent)}</TableCell>
                   <TableCell className="text-right">{formatNumber(property.monthly_expenses)}</TableCell>
-                  <TableCell className="text-right">{property.yearly_appreciation_percent !== null ? property.yearly_appreciation_percent + "%" : "-"}</TableCell>
+                  <TableCell className="text-right">{formatNumber(property.free_collateral)}</TableCell>
                   <TableCell>{property.loans?.name || "-"}</TableCell>
                   {!readOnly && (
                   <TableCell className="text-right">

@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +49,9 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
     editData?.property_type === "multi" ? "multi" : "single"
   );
   const [units, setUnits] = useState<PropertyUnit[]>([emptyUnit(1)]);
+  // Nemovitost může zajišťovat víc úvěrů (M:N přes loan_collaterals) — stejně
+  // jako úvěr může mít víc zástav.
+  const [selectedLoanIds, setSelectedLoanIds] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     identifier: editData?.identifier || "",
@@ -57,8 +59,6 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
     estimated_value: editData?.estimated_value?.toString() || "",
     monthly_rent: editData?.monthly_rent?.toString() || "",
     monthly_expenses: editData?.monthly_expenses?.toString() || "",
-    yearly_appreciation_percent: editData?.yearly_appreciation_percent?.toString() || "",
-    loan_id: editData?.loan_id || "",
   });
 
   // Fetch loans + existing units if editing
@@ -77,6 +77,19 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
             .order("created_at", { ascending: false })
         : { data: [] as any[] };
       setLoans(loansData || []);
+
+      // Předvyplň propojené úvěry z junction tabulky (property-level zástavy)
+      if (editData?.id) {
+        const { data: lc } = await supabase
+          .from("loan_collaterals")
+          .select("loan_id")
+          .eq("property_id", editData.id)
+          .is("property_unit_id", null);
+        const ids = Array.from(new Set((lc || []).map((r: any) => r.loan_id)));
+        // legacy property.loan_id fallback
+        if (ids.length === 0 && editData.loan_id) ids.push(editData.loan_id);
+        setSelectedLoanIds(ids);
+      }
 
       // Load existing units for multi-unit property
       if (editData?.id && editData?.property_type === "multi") {
@@ -152,9 +165,8 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
       estimated_value: estimatedValue,
       monthly_rent: propertyType === "multi" ? totalRent : (parseNum(formData.monthly_rent) ?? null),
       monthly_expenses: propertyType === "multi" ? totalExpenses : (parseNum(formData.monthly_expenses) ?? null),
-      yearly_appreciation_percent: parseNum(formData.yearly_appreciation_percent) ?? null,
       is_forecast: false,
-      loan_id: formData.loan_id || null,
+      loan_id: selectedLoanIds[0] || null,
       property_type: propertyType,
     };
 
@@ -204,6 +216,29 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
       }
     }
 
+    // Sync propojení s úvěry (property-level zástavy v loan_collaterals).
+    // Spravujeme jen řádky této nemovitosti bez property_unit_id.
+    if (propertyId) {
+      await supabase
+        .from("loan_collaterals")
+        .delete()
+        .eq("property_id", propertyId)
+        .is("property_unit_id", null);
+
+      if (selectedLoanIds.length > 0) {
+        const rows = selectedLoanIds.map((lid) => ({
+          loan_id: lid,
+          property_id: propertyId!,
+          property_unit_id: null,
+          collateral_amount: estimatedValue,
+        }));
+        const { error: lcErr } = await supabase.from("loan_collaterals").insert(rows);
+        if (lcErr) {
+          toast({ title: "Varování", description: "Nemovitost uložena, ale propojení s úvěry se nepodařilo uložit." });
+        }
+      }
+    }
+
     toast({
       title: "Úspěch",
       description: editData ? "Nemovitost byla upravena" : "Nemovitost byla přidána",
@@ -212,8 +247,9 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
     // Reset
     setFormData({
       identifier: "", purchase_price: "", estimated_value: "",
-      monthly_rent: "", monthly_expenses: "", yearly_appreciation_percent: "", loan_id: "",
+      monthly_rent: "", monthly_expenses: "",
     });
+    setSelectedLoanIds([]);
     setUnits([emptyUnit(1)]);
     setPropertyType("single");
     setOpen(false);
@@ -388,36 +424,30 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label>Roční zhodnocení (%)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={formData.yearly_appreciation_percent}
-              onChange={(e) => setFormData({ ...formData, yearly_appreciation_percent: e.target.value })}
-              placeholder="3.0"
-            />
-          </div>
-
           {loans.length > 0 && (
             <div className="space-y-2">
-              <Label>Propojit s úvěrem <span className="text-muted-foreground font-normal">— nepovinné</span></Label>
-              <Select
-                value={formData.loan_id}
-                onValueChange={(v) => setFormData({ ...formData, loan_id: v === "none" ? "" : v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Žádný úvěr" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Žádný úvěr</SelectItem>
-                  {loans.map((loan) => (
-                    <SelectItem key={loan.id} value={loan.id}>
-                      {loan.name} ({formatCurrency(loan.original_amount)})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Propojit s úvěry <span className="text-muted-foreground font-normal">— nepovinné, lze vybrat více</span></Label>
+              <div className="space-y-1.5 rounded-md border p-3">
+                {loans.map((loan) => {
+                  const checked = selectedLoanIds.includes(loan.id);
+                  return (
+                    <div key={loan.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`loan-${loan.id}`}
+                        checked={checked}
+                        onCheckedChange={(c) =>
+                          setSelectedLoanIds((prev) =>
+                            c ? [...prev, loan.id] : prev.filter((x) => x !== loan.id)
+                          )
+                        }
+                      />
+                      <Label htmlFor={`loan-${loan.id}`} className="text-sm font-normal cursor-pointer">
+                        {loan.name} ({formatCurrency(loan.original_amount)})
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

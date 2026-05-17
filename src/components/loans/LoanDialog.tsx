@@ -196,6 +196,8 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
 
   const addCollateral = () => {
     setCollaterals([...collaterals, { sourceId: "", sourceType: "", amount: "", label: "" }]);
+    // Zajištěný úvěr musí mít LTV — předvyplň 80 %, klient může změnit.
+    setFormData((prev) => (prev.ltv_percent ? prev : { ...prev, ltv_percent: "80" }));
   };
 
   const removeCollateral = (index: number) => {
@@ -287,6 +289,15 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
       .map((c) => c.label)
       .join(", ");
 
+    // Zajištěný úvěr (má zástavu) MUSÍ mít LTV — default 80 % (pro výpočet
+    // "volné zástavy" u nemovitosti). Nezajištěný úvěr LTV nepotřebuje.
+    const hasCollateral = collaterals.some(
+      (c) => (c.sourceId && (c.sourceType === "property" || c.sourceType === "unit")) || c.sourceType === "new"
+    );
+    const ltvValue = hasCollateral
+      ? (parseNum(formData.ltv_percent) ?? 80)
+      : (parseNum(formData.ltv_percent) ?? null);
+
     const dataToSave = {
       user_id: targetUserId,
       name: formData.name?.trim() || "Úvěr",
@@ -295,7 +306,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
       interest_rate: rate,
       term_months: termYears * 12,
       monthly_payment: payment,
-      ltv_percent: parseNum(formData.ltv_percent) ?? null,
+      ltv_percent: ltvValue,
       collateral_location: collateralLabels || null,
       bank_name: formData.bank_name || null,
       is_forecast: false,
