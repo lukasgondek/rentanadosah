@@ -64,10 +64,18 @@ export const PropertyDialog = ({ onSuccess, editData, userId }: PropertyDialogPr
   // Fetch loans + existing units if editing
   useEffect(() => {
     const fetchData = async () => {
-      const { data: loansData } = await supabase
-        .from("loans")
-        .select("id, name, original_amount")
-        .order("created_at", { ascending: false });
+      // Scope na konkrétního klienta — admin má RLS "vidí vše", bez filtru
+      // by se nabízely úvěry všech klientů (datový únik).
+      const { data: { user } } = await supabase.auth.getUser();
+      const targetUserId = userId || user?.id;
+
+      const { data: loansData } = targetUserId
+        ? await supabase
+            .from("loans")
+            .select("id, name, original_amount")
+            .eq("user_id", targetUserId)
+            .order("created_at", { ascending: false })
+        : { data: [] as any[] };
       setLoans(loansData || []);
 
       // Load existing units for multi-unit property

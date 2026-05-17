@@ -139,6 +139,7 @@ export default function LoansTab({ userId: viewUserId, isAdmin = false }: { user
       {editingLoan && (
         <LoanDialog
           editData={editingLoan}
+          userId={viewUserId || undefined}
           onSuccess={() => {
             setEditingLoan(null);
             fetchLoans();

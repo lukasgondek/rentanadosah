@@ -146,6 +146,7 @@ export default function PropertiesTab({ userId: viewUserId, isAdmin = false }: {
       {editingProperty && (
         <PropertyDialog
           editData={editingProperty}
+          userId={viewUserId || undefined}
           onSuccess={() => {
             setEditingProperty(null);
             fetchProperties();

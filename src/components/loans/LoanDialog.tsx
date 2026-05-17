@@ -24,11 +24,29 @@ interface CollateralOption {
   type: "property" | "unit";
 }
 
+interface NewPropFields {
+  identifier: string;
+  purchase_price: string;
+  estimated_value: string;
+  monthly_rent: string;
+  monthly_expenses: string;
+}
+
+const emptyNewProp = (): NewPropFields => ({
+  identifier: "",
+  purchase_price: "",
+  estimated_value: "",
+  monthly_rent: "",
+  monthly_expenses: "",
+});
+
 interface CollateralEntry {
-  sourceId: string; // property_id or unit_id or "" for manual
-  sourceType: "property" | "unit" | "manual";
+  sourceId: string; // property_id or unit_id or "" for manual/new
+  sourceType: "property" | "unit" | "manual" | "new";
   amount: string;
   label: string; // for display
+  /** vyplněno jen když sourceType === "new" — nová nemovitost se vytvoří do portfolia */
+  newProp?: NewPropFields;
 }
 
 interface LoanDialogProps {
@@ -59,10 +77,17 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
   // Fetch collateral options (properties + cadastrally separated units)
   useEffect(() => {
     const fetchCollateralOptions = async () => {
-      // Fetch all properties
+      // Scope na konkrétního klienta — v admin režimu má admin RLS "vidí vše",
+      // takže BEZ tohoto filtru by se nabízely nemovitosti všech klientů (datový únik).
+      const { data: { user } } = await supabase.auth.getUser();
+      const targetUserId = userId || user?.id;
+      if (!targetUserId) return;
+
+      // Fetch properties klienta
       const { data: props } = await supabase
         .from("properties")
         .select("id, identifier, estimated_value, property_type")
+        .eq("user_id", targetUserId)
         .order("created_at", { ascending: false });
 
       const options: CollateralOption[] = [];
@@ -86,11 +111,16 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
         });
       }
 
-      // Fetch cadastrally separated units
-      const { data: units } = await supabase
-        .from("property_units")
-        .select("id, name, estimated_value, property_id, is_cadastrally_separated")
-        .eq("is_cadastrally_separated", true);
+      // Fetch cadastrally separated units — jen z nemovitostí tohoto klienta
+      // (property_units nemá user_id, scope řešíme přes property_id klienta)
+      const propIds = (props || []).map((p) => p.id);
+      const { data: units } = propIds.length
+        ? await supabase
+            .from("property_units")
+            .select("id, name, estimated_value, property_id, is_cadastrally_separated")
+            .eq("is_cadastrally_separated", true)
+            .in("property_id", propIds)
+        : { data: [] as any[] };
 
       for (const u of units || []) {
         if (u.estimated_value) {
@@ -179,7 +209,9 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
   const updateCollateral = (index: number, sourceId: string) => {
     const newCollaterals = [...collaterals];
     if (sourceId === "manual") {
-      newCollaterals[index] = { ...newCollaterals[index], sourceId: "", sourceType: "manual", label: "" };
+      newCollaterals[index] = { ...newCollaterals[index], sourceId: "", sourceType: "manual", label: "", newProp: undefined };
+    } else if (sourceId === "new") {
+      newCollaterals[index] = { ...newCollaterals[index], sourceId: "", sourceType: "new", label: "", newProp: emptyNewProp() };
     } else {
       const opt = collateralOptions.find((o) => o.id === sourceId);
       if (opt) {
@@ -189,6 +221,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
           sourceType: opt.type,
           label: opt.label,
           amount: newCollaterals[index].amount || opt.estimatedValue.toString(),
+          newProp: undefined,
         };
       }
     }
@@ -198,6 +231,27 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
   const updateCollateralAmount = (index: number, amount: string) => {
     const newCollaterals = [...collaterals];
     newCollaterals[index] = { ...newCollaterals[index], amount };
+    setCollaterals(newCollaterals);
+  };
+
+  // C1: ruční zástava — uživatel píše vlastní popis (label jde do collateral_location)
+  const updateCollateralLabel = (index: number, label: string) => {
+    const newCollaterals = [...collaterals];
+    newCollaterals[index] = { ...newCollaterals[index], label };
+    setCollaterals(newCollaterals);
+  };
+
+  // C2: editace polí nové nemovitosti přímo v řádku zástavy
+  const updateCollateralNewProp = (index: number, field: keyof NewPropFields, value: string) => {
+    const newCollaterals = [...collaterals];
+    const cur = newCollaterals[index];
+    const np = { ...(cur.newProp || emptyNewProp()), [field]: value };
+    // Předvyplň výši zástavy odhadní hodnotou (dokud ji uživatel ručně nepřepsal)
+    const amount =
+      field === "estimated_value" && (!cur.amount || cur.amount === cur.newProp?.estimated_value)
+        ? value
+        : cur.amount;
+    newCollaterals[index] = { ...cur, newProp: np, label: np.identifier, amount };
     setCollaterals(newCollaterals);
   };
 
@@ -220,11 +274,25 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
     if (!termYears || termYears <= 0) { showError("Vyplňte dobu splácení"); return; }
     if (!payment || payment <= 0) { showError("Vyplňte měsíční splátku"); return; }
 
+    // C2: validace nových nemovitostí (vytvoří se do portfolia)
+    for (const c of collaterals) {
+      if (c.sourceType !== "new") continue;
+      const np = c.newProp;
+      if (!np?.identifier?.trim()) { showError("U nové nemovitosti vyplňte identifikátor"); return; }
+      if (!parseNum(np.purchase_price) || (parseNum(np.purchase_price) ?? 0) <= 0) {
+        showError(`U nové nemovitosti „${np.identifier}" vyplňte kupní cenu`); return;
+      }
+      if (!parseNum(np.estimated_value) || (parseNum(np.estimated_value) ?? 0) <= 0) {
+        showError(`U nové nemovitosti „${np.identifier}" vyplňte odhadní hodnotu`); return;
+      }
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast({ title: "Chyba", description: "Musíte být přihlášeni", variant: "destructive" });
       return;
     }
+    const targetUserId = userId || user.id;
 
     // Build collateral location string for display
     const collateralLabels = collaterals
@@ -233,7 +301,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
       .join(", ");
 
     const dataToSave = {
-      user_id: userId || user.id,
+      user_id: targetUserId,
       name: formData.name?.trim() || "Úvěr",
       original_amount: amount,
       remaining_principal: remaining,
@@ -272,15 +340,57 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
 
     // Save collaterals to junction table
     if (loanId) {
+      // C2: nejdřív vytvoř nové nemovitosti do portfolia klienta a převeď je
+      // na běžné property zástavy (propíše se mezi nemovitosti).
+      const resolved: CollateralEntry[] = [];
+      for (const c of collaterals) {
+        if (c.sourceType === "new" && c.newProp) {
+          const np = c.newProp;
+          const { data: createdProp, error: propErr } = await supabase
+            .from("properties")
+            .insert({
+              user_id: targetUserId,
+              identifier: np.identifier.trim(),
+              purchase_price: parseNum(np.purchase_price)!,
+              estimated_value: parseNum(np.estimated_value)!,
+              monthly_rent: parseNum(np.monthly_rent) ?? null,
+              monthly_expenses: parseNum(np.monthly_expenses) ?? null,
+              property_type: "single",
+              is_forecast: false,
+              loan_id: loanId,
+            })
+            .select("id")
+            .single();
+          if (propErr || !createdProp) {
+            toast({
+              title: "Varování",
+              description: `Nemovitost „${np.identifier}" se nepodařilo vytvořit — zástava nebyla uložena.`,
+              variant: "destructive",
+            });
+            continue;
+          }
+          resolved.push({
+            ...c,
+            sourceId: `prop_${createdProp.id}`,
+            sourceType: "property",
+            label: np.identifier,
+            amount: c.amount || np.estimated_value,
+            newProp: undefined,
+          });
+        } else {
+          resolved.push(c);
+        }
+      }
+
       // Clear old collateral records
       await supabase.from("loan_collaterals").delete().eq("loan_id", loanId);
 
       // Also clear old property.loan_id links (backwards compat)
       await supabase.from("properties").update({ loan_id: null }).eq("loan_id", loanId);
 
-      // Insert new collateral records
-      const collateralRecords = collaterals
-        .filter((c) => c.sourceId && (parseNum(c.amount) || 0) > 0)
+      // Insert new collateral records (jen property/unit — ruční zástava jde do collateral_location)
+      const collateralRecords = resolved
+        .filter((c) => c.sourceId && (c.sourceType === "property" || c.sourceType === "unit") && (parseNum(c.amount) || 0) > 0)
         .map((c) => {
           const realId = c.sourceId.replace(/^(prop_|unit_)/, "");
           return {
@@ -295,11 +405,13 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
         await supabase.from("loan_collaterals").insert(collateralRecords);
       }
 
-      // Also update property.loan_id for first property collateral (backwards compat)
-      const firstPropCollateral = collaterals.find((c) => c.sourceType === "property" && c.sourceId);
-      if (firstPropCollateral) {
-        const propId = firstPropCollateral.sourceId.replace("prop_", "");
-        await supabase.from("properties").update({ loan_id: loanId }).eq("id", propId);
+      // Obousměrné propsání: všechny property zástavy propoj zpět na úvěr
+      // (PropertiesTab pak v sloupci "Úvěr" ukáže název úvěru).
+      const propIds = resolved
+        .filter((c) => c.sourceType === "property" && c.sourceId)
+        .map((c) => c.sourceId.replace("prop_", ""));
+      if (propIds.length > 0) {
+        await supabase.from("properties").update({ loan_id: loanId }).in("id", propIds);
       }
     }
 
@@ -433,19 +545,20 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
               <div key={idx} className="border rounded-lg p-3 space-y-2 bg-muted/30">
                 <div className="flex items-center gap-2">
                   <Select
-                    value={col.sourceId || "manual"}
+                    value={col.sourceType === "new" ? "new" : (col.sourceId || "manual")}
                     onValueChange={(v) => updateCollateral(idx, v)}
                   >
                     <SelectTrigger className="flex-1 h-8 text-sm">
                       <SelectValue placeholder="Vyberte nemovitost" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="manual">Jiná (ruční zápis)</SelectItem>
                       {collateralOptions.map((opt) => (
                         <SelectItem key={opt.id} value={opt.id}>
                           {opt.label} ({formatCurrency(opt.estimatedValue)})
                         </SelectItem>
                       ))}
+                      <SelectItem value="new">➕ Nová nemovitost (přidá se do portfolia)</SelectItem>
+                      <SelectItem value="manual">Jiná (ruční zápis)</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button type="button" variant="ghost" size="sm"
@@ -454,6 +567,61 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+
+                {/* C1: ruční zápis zástavy */}
+                {col.sourceType === "manual" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Popis zástavy</Label>
+                    <Input
+                      value={col.label}
+                      onChange={(e) => updateCollateralLabel(idx, e.target.value)}
+                      placeholder="Např. Byt Praha 5, ul. Plzeňská"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                )}
+
+                {/* C2: nová nemovitost — vytvoří se do portfolia klienta */}
+                {col.sourceType === "new" && col.newProp && (
+                  <div className="space-y-2 rounded-md border border-dashed p-2">
+                    <p className="text-xs text-muted-foreground">
+                      Tato nemovitost se automaticky přidá do portfolia klienta.
+                    </p>
+                    <Input
+                      value={col.newProp.identifier}
+                      onChange={(e) => updateCollateralNewProp(idx, "identifier", e.target.value)}
+                      placeholder="Identifikátor (např. Praha 2, Vinohrady, Slezská)"
+                      className="h-8 text-sm"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Kupní cena (Kč)</Label>
+                        <FormattedNumberInput value={col.newProp.purchase_price}
+                          onValueChange={(v) => updateCollateralNewProp(idx, "purchase_price", v)}
+                          placeholder="5.000.000" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Odhadní hodnota (Kč)</Label>
+                        <FormattedNumberInput value={col.newProp.estimated_value}
+                          onValueChange={(v) => updateCollateralNewProp(idx, "estimated_value", v)}
+                          placeholder="5.500.000" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Měsíční nájem (Kč)</Label>
+                        <FormattedNumberInput value={col.newProp.monthly_rent}
+                          onValueChange={(v) => updateCollateralNewProp(idx, "monthly_rent", v)}
+                          placeholder="25.000" className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Měsíční výdaje (Kč)</Label>
+                        <FormattedNumberInput value={col.newProp.monthly_expenses}
+                          onValueChange={(v) => updateCollateralNewProp(idx, "monthly_expenses", v)}
+                          placeholder="5.000" className="h-8 text-sm" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-1">
                   <Label className="text-xs">Výše zástavy (Kč)</Label>
                   <FormattedNumberInput value={col.amount}

@@ -203,12 +203,22 @@ export const AdminDashboard = ({ onSelectClient, selectedClientId }: AdminDashbo
         if (error) throw error;
       }
 
-      // Update user_roles, pokud je uživatel zaregistrován
+      // Update user_roles, pokud je uživatel zaregistrován.
+      // user_roles je multi-role (UNIQUE user_id+role) — admin řádek nikdy nemažeme,
+      // jen prohodíme prospect↔user. useUserRole prioritizuje prospect řádek,
+      // takže starý řádek MUSÍ pryč, jinak by promotion na klienta neměla efekt.
       if (person.profileId) {
-        const { error: roleErr } = await supabase
+        const { error: delErr } = await supabase
           .from("user_roles")
-          .upsert({ user_id: person.profileId, role: newRoleVal }, { onConflict: "user_id" });
-        if (roleErr) throw roleErr;
+          .delete()
+          .eq("user_id", person.profileId)
+          .in("role", ["user", "prospect"]);
+        if (delErr) throw delErr;
+
+        const { error: insErr } = await supabase
+          .from("user_roles")
+          .insert({ user_id: person.profileId, role: newRoleVal });
+        if (insErr) throw insErr;
       }
 
       toast({
