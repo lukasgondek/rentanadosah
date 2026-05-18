@@ -43,21 +43,34 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
     fetchInvestments();
   }, [viewUserId]);
 
-  // Stávající cashflow (příjmy − výdaje − splátky) pro "Výsledné cashflow"
+  // REÁLNÝ stávající cashflow (stejná logika jako Dashboard/Příjmy/dialog) —
+  // ne daňový základ. Příjmy KROMĚ účetního "rental" (nahrazuje reálný nájem
+  // z nemovitostí), override real_net_monthly, paušál výdaje % → celý příjem.
   useEffect(() => {
     const fetchCashflow = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const targetId = viewUserId || user.id;
-      const [inc, exp, lo] = await Promise.all([
-        supabase.from("income_sources").select("monthly_amount").eq("user_id", targetId),
+      const [inc, exp, lo, pr] = await Promise.all([
+        supabase.from("income_sources").select("type, category, expense_type, income_amount, monthly_amount, real_net_monthly").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
         supabase.from("loans").select("monthly_payment").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("properties").select("monthly_rent, monthly_expenses").eq("user_id", targetId).eq("is_forecast", false),
       ]);
-      const ti = (inc.data || []).reduce((s, i) => s + (i.monthly_amount || 0), 0);
+      const realNonRental = (inc.data || [])
+        .filter((i: any) => i.type !== "rental")
+        .reduce((s: number, i: any) => {
+          if (i.real_net_monthly != null) return s + i.real_net_monthly;
+          const flatRate =
+            (i.category === "self_employed_s7" || i.category === "rental_s9") &&
+            i.expense_type === "flat_rate" && i.income_amount;
+          return s + (flatRate ? (i.income_amount || 0) / 12 : (i.monthly_amount || 0));
+        }, 0);
+      const propRent = (pr.data || []).reduce((s: number, p: any) => s + (p.monthly_rent || 0), 0);
+      const propExp = (pr.data || []).reduce((s: number, p: any) => s + (p.monthly_expenses || 0), 0);
       const te = (exp.data || []).reduce((s, e) => s + (e.amount || 0), 0);
       const tl = (lo.data || []).reduce((s, l) => s + (l.monthly_payment || 0), 0);
-      setCurrentCashflow(ti - te - tl);
+      setCurrentCashflow(realNonRental + propRent - propExp - te - tl);
     };
     fetchCashflow();
   }, [viewUserId]);
