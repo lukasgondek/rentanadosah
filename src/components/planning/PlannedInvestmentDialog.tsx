@@ -78,7 +78,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     return Math.max(0, B);
   };
   const projValue = (p: any) => {
-    const v = p.estimated_value || 0;
+    const v = p.estimated_value || p.purchase_price || 0;
     if (offsetYears <= 0) return v;
     const a = ((p.yearly_appreciation_percent ?? 3) as number) / 100;
     return v * Math.pow(1 + a, offsetYears);
@@ -127,7 +127,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
         supabase.from("income_sources").select("type, category, expense_type, income_amount, monthly_amount, real_net_monthly").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
         supabase.from("loans").select("id, name, monthly_payment, remaining_principal, interest_rate, ltv_percent").eq("user_id", targetId).eq("is_forecast", false),
-        supabase.from("properties").select("id, identifier, estimated_value, monthly_rent, monthly_expenses, loan_id, yearly_appreciation_percent").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("properties").select("id, identifier, estimated_value, purchase_price, monthly_rent, monthly_expenses, loan_id, yearly_appreciation_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("loan_collaterals").select("property_id, loan_id"),
       ]);
 
@@ -674,14 +674,11 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                         }
                       />
                       <Label htmlFor={`coll-${p.id}`} className="text-sm font-normal cursor-pointer">
-                        {p.identifier} — hodnota {formatNumber(Math.round(projValue(p)))} Kč,
-                        {" volná zástava "}
+                        {p.identifier} — {offsetYears > 0 ? `hodnota za ${offsetYears} let ` : "hodnota "}
+                        {formatNumber(Math.round(projValue(p)))} Kč, volná zástava{" "}
                         <span className="font-semibold text-primary">
                           {formatNumber(Math.round(projFreeCollateral(p)))} Kč
                         </span>
-                        {offsetYears > 0 && (
-                          <span className="text-muted-foreground"> (za {offsetYears} let)</span>
-                        )}
                       </Label>
                     </div>
                   ))}
@@ -721,12 +718,12 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                       }
                     />
                     <Label htmlFor={`refi-${loan.id}`} className="text-sm font-normal cursor-pointer">
-                      {loan.name || "Úvěr"} — splátka {formatNumber(loan.monthly_payment || 0)} Kč/měs
-                      {", zbývá "}
+                      {loan.name || "Úvěr"} — splátka {formatNumber(loan.monthly_payment || 0)} Kč/měs,{" "}
+                      {offsetYears > 0 ? `za ${offsetYears} let zbývá ` : "zbývá "}
                       {formatNumber(Math.round(projRemaining(loan)))} Kč
                       {offsetYears > 0 && (
                         <span className="text-muted-foreground">
-                          {" "}(za {offsetYears} let; dnes {formatNumber(Math.round(loan.remaining_principal || 0))})
+                          {" "}(dnes {formatNumber(Math.round(loan.remaining_principal || 0))})
                         </span>
                       )}
                     </Label>
@@ -926,12 +923,6 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
               </div>
             )}
 
-            {calculations.cash_remaining > 0 && (
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
-                💰 Úvěr je vyšší než kupní cena — v hotovosti zůstane{" "}
-                <strong>{formatNumber(calculations.cash_remaining)} Kč</strong>.
-              </div>
-            )}
           </div>
 
           <div className="flex justify-end gap-2">

@@ -297,13 +297,14 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
               <TableHead className="text-right">Měs. cashflow</TableHead>
               <TableHead className="text-right">Čistý zisk 5 let</TableHead>
               <TableHead className="text-right">Čistý zisk 10 let</TableHead>
+              <TableHead className="text-right">Měs. zisk zpětně</TableHead>
               {!readOnly && <TableHead className="text-right">Akce</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {stepRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   Žádné plánované investice
                 </TableCell>
               </TableRow>
@@ -321,6 +322,7 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
                   </TableCell>
                   <TableCell className="text-right text-primary">{formatNumber(Math.round(calc.profit5Years))} Kč</TableCell>
                   <TableCell className="text-right font-semibold text-primary">{formatNumber(Math.round(calc.profit10Years))} Kč</TableCell>
+                  <TableCell className="text-right">{formatNumber(Math.round(calc.profit10Years / 120))} Kč</TableCell>
                   {!readOnly && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

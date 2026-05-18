@@ -199,7 +199,8 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
       // ── Forecast: chain planned investments ──
       const plannedData = plannedRes.data || [];
       if (plannedData.length > 0) {
-        let runningCashflow = totalIncome - totalExpenses - totalLoanPayments;
+        // Reálný cashflow základ (ne daňový) — stejný jako Měsíční cashflow
+        let runningCashflow = realNonRental + propRent - propExpenses - totalExpenses - totalLoanPayments;
         let runningPropertyValue = propertyValue;
         let runningDebt = totalDebt;
         let runningInvestmentValue = investmentValue;
