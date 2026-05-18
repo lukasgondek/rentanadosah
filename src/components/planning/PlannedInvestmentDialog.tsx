@@ -235,6 +235,11 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     const refinancedPayments = availableLoans
       .filter((l) => refinancedLoanIds.includes(l.id))
       .reduce((sum, l) => sum + (l.monthly_payment || 0), 0);
+    // Refinancování: nové financování splatí starý úvěr → jeho zbývající
+    // jistina ubere z hotovosti po transakci.
+    const refinancedPayoff = availableLoans
+      .filter((l) => refinancedLoanIds.includes(l.id))
+      .reduce((sum, l) => sum + (l.remaining_principal || 0), 0);
 
     // Prodej nemovitostí: ubyde čistý nájem (rent − expenses) z cashflow;
     // při "splatit úvěr" se navíc uvolní splátka (cashflow) a z prodeje se
@@ -263,7 +268,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
 
     // Hotovost po transakci: načerpání nad kupní cenu (kladné) nebo doplatek
     // z hotovosti (záporné) + výtěžky z prodeje − splacené úvěry.
-    const cashAfterTransaction = (loanAmount - purchasePrice) + soldCashProceeds;
+    const cashAfterTransaction = (loanAmount - purchasePrice) + soldCashProceeds - refinancedPayoff;
 
     // Cash remaining (jen kladné — informativní hláška): úvěr > kupní cena
     const cashRemaining = loanAmount > purchasePrice ? loanAmount - purchasePrice : 0;
@@ -784,9 +789,9 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
               <div className="space-y-2">
                 <Label>Aktuální dopad na osobní měsíční cashflow (Kč)</Label>
                 <Input
-                  value={formatNumber(calculations.current_cashflow_impact)}
+                  value={`${calculations.current_cashflow_impact >= 0 ? "+" : ""}${formatNumber(calculations.current_cashflow_impact)}`}
                   disabled
-                  className="bg-background font-semibold"
+                  className={`font-semibold ${calculations.current_cashflow_impact < 0 ? "bg-red-50 text-red-600" : "bg-background"}`}
                 />
               </div>
               <div className="space-y-2">

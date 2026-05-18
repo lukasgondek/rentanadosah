@@ -13,9 +13,6 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [currentCashflow, setCurrentCashflow] = useState(0);
-  // Odstup kroku = roky PO předchozím kroku (0 = hned). Persistováno do
-  // planned_investments.step_year. Kumulativní rok = součet odstupů.
-  const [stepYears, setStepYears] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const readOnly = !!viewUserId && !isAdmin;
 
@@ -234,21 +231,10 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
     };
   };
 
-  const getOffset = (inv: any) => stepYears[inv.id] ?? inv.step_year ?? 0;
+  const getOffset = (inv: any) => inv.step_year ?? 0;
 
-  const updateOffset = async (inv: any, raw: string) => {
-    const y = Math.max(0, Math.min(30, parseInt(raw) || 0));
-    setStepYears((prev) => ({ ...prev, [inv.id]: y }));
-    const { error } = await supabase
-      .from("planned_investments")
-      .update({ step_year: y })
-      .eq("id", inv.id);
-    if (error) {
-      toast({ title: "Chyba", description: "Odstup kroku se nepodařilo uložit", variant: "destructive" });
-    }
-  };
-
-  // Kroky v pořadí (nejstarší = krok 1). Kumulativní rok = součet odstupů.
+  // Kroky v pořadí (nejstarší = krok 1). Kumulativní rok = součet odstupů
+  // (odstup se nastavuje při plánování investice, ne zpětně tady).
   const orderedSteps = [...investments].sort(
     (a, b) => (a.created_at || "").localeCompare(b.created_at || "")
   );
@@ -311,14 +297,13 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
               <TableHead className="text-right">Měs. cashflow</TableHead>
               <TableHead className="text-right">Čistý zisk 5 let</TableHead>
               <TableHead className="text-right">Čistý zisk 10 let</TableHead>
-              {!readOnly && <TableHead className="text-right">Odstup</TableHead>}
               {!readOnly && <TableHead className="text-right">Akce</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {stepRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Žádné plánované investice
                 </TableCell>
               </TableRow>
@@ -336,23 +321,6 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
                   </TableCell>
                   <TableCell className="text-right text-primary">{formatNumber(Math.round(calc.profit5Years))} Kč</TableCell>
                   <TableCell className="text-right font-semibold text-primary">{formatNumber(Math.round(calc.profit10Years))} Kč</TableCell>
-                  {!readOnly && (
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <span className="text-muted-foreground text-xs">+</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={30}
-                          value={getOffset(inv)}
-                          onChange={(e) => updateOffset(inv, e.target.value)}
-                          className="w-14 h-8 border rounded-md px-2 text-sm"
-                          title="Roky po předchozím kroku"
-                        />
-                        <span className="text-muted-foreground text-xs">let</span>
-                      </div>
-                    </TableCell>
-                  )}
                   {!readOnly && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
