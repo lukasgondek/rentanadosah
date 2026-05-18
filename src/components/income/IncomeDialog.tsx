@@ -34,6 +34,8 @@ interface IncomeFormData {
   // Other
   otherAmount?: number;
   otherFrequency?: OtherFrequency;
+  // Reálně zůstává (override pro cashflow — hlavně u paušálu výdaje %)
+  realNetMonthly?: number;
 }
 
 /** Safely parse a numeric input value — returns undefined for empty/NaN */
@@ -58,6 +60,7 @@ export interface IncomeEditData {
   business_expenses?: number | null;
   other_amount?: number | null;
   other_frequency?: string | null;
+  real_net_monthly?: number | null;
 }
 
 const editDataToFormData = (data: IncomeEditData): IncomeFormData => ({
@@ -74,6 +77,7 @@ const editDataToFormData = (data: IncomeEditData): IncomeFormData => ({
   businessExpenses: data.business_expenses ?? undefined,
   otherAmount: data.other_amount ?? undefined,
   otherFrequency: (data.other_frequency as OtherFrequency) || "monthly",
+  realNetMonthly: data.real_net_monthly ?? undefined,
 });
 
 const defaultFormData: IncomeFormData = {
@@ -269,6 +273,7 @@ export const IncomeDialog = ({ onSuccess, userId, editData, open: controlledOpen
       other_frequency: formData.otherFrequency,
       monthly_amount: monthlyAmount,
       yearly_amount: yearlyAmount,
+      real_net_monthly: formData.realNetMonthly ?? null,
     };
 
     let error;
@@ -567,6 +572,22 @@ export const IncomeDialog = ({ onSuccess, userId, editData, open: controlledOpen
               </div>
             </div>
           )}
+
+          <div className="space-y-1.5 border-t pt-4">
+            <Label>Reálně mi měsíčně zůstává (Kč) — nepovinné</Label>
+            <FormattedNumberInput
+              value={formData.realNetMonthly?.toString() || ""}
+              onValueChange={(v) =>
+                setFormData({ ...formData, realNetMonthly: parseNum(v) })
+              }
+              placeholder="Skutečná čistá hotovost po dani/odvodech"
+            />
+            <p className="text-xs text-muted-foreground">
+              Když vyplníš, cashflow počítá s tímto číslem (přesnější u paušálu
+              výdaje %). Prázdné = odvodí se automaticky. Daňový základ pro
+              finančáka se tím nemění.
+            </p>
+          </div>
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

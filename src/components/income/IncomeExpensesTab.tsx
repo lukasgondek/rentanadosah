@@ -90,6 +90,7 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
   // (zaměstnání, paušální daň, skutečné výdaje, firemní, ostatní) =
   // daňový základ = reálná hotovost.
   const realNetMonthly = (inv: any) => {
+    if (inv.real_net_monthly != null) return inv.real_net_monthly; // ruční override
     const flatRate =
       (inv.category === "self_employed_s7" || inv.category === "rental_s9") &&
       inv.expense_type === "flat_rate" &&
@@ -210,8 +211,8 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
                 </div>
                 {hasFlatRate && (
                   <p className="text-xs text-muted-foreground pt-1">
-                    U paušálu (výdaje %) je „reálně zůstává" zatím celý příjem —
-                    přesné odečtení daně/odvodů (ruční pole) doplníme po odblokování DB.
+                    U paušálu (výdaje %) je „reálně zůstává" celý příjem. Pro přesné
+                    odečtení daně/odvodů vyplň u příjmu pole „Reálně mi měsíčně zůstává".
                   </p>
                 )}
               </div>

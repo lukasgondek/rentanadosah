@@ -131,6 +131,7 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
       const realNonRental = incomeData
         .filter(item => item.type !== "rental")
         .reduce((sum, item) => {
+          if (item.real_net_monthly != null) return sum + item.real_net_monthly;
           const flatRate =
             (item.category === "self_employed_s7" || item.category === "rental_s9") &&
             item.expense_type === "flat_rate" && item.income_amount;

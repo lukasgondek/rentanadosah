@@ -229,6 +229,21 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
     };
   };
 
+  // step_year: lokální stav má přednost, jinak hodnota z DB, jinak 0
+  const getStepYear = (inv: any) => stepYears[inv.id] ?? inv.step_year ?? 0;
+
+  const updateStepYear = async (inv: any, raw: string) => {
+    const y = Math.max(0, Math.min(10, parseInt(raw) || 0));
+    setStepYears((prev) => ({ ...prev, [inv.id]: y }));
+    const { error } = await supabase
+      .from("planned_investments")
+      .update({ step_year: y })
+      .eq("id", inv.id);
+    if (error) {
+      toast({ title: "Chyba", description: "Rok kroku se nepodařilo uložit", variant: "destructive" });
+    }
+  };
+
   // ── Scénář: časová projekce + řetězení kroků (buy-only) ──
   // Model: existující portfolio roste (hodnota dle %), dluh se odsplácí
   // (aproximace 0,14 %/měs jako jinde), hotovost kumuluje roční cashflow.
@@ -245,7 +260,7 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
     const snapshots: Record<number, any> = {};
     const applyStepsForYear = (y: number) => {
       investments.forEach((inv) => {
-        if ((stepYears[inv.id] || 0) !== y) return;
+        if (getStepYear(inv) !== y) return;
         const c = calculateValues(inv);
         propValue += inv.estimated_value || 0;
         debt += inv.loan_amount || 0;
@@ -336,13 +351,8 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
                     type="number"
                     min={0}
                     max={10}
-                    value={stepYears[inv.id] ?? 0}
-                    onChange={(e) =>
-                      setStepYears((prev) => ({
-                        ...prev,
-                        [inv.id]: Math.max(0, Math.min(10, parseInt(e.target.value) || 0)),
-                      }))
-                    }
+                    value={getStepYear(inv)}
+                    onChange={(e) => updateStepYear(inv, e.target.value)}
                     className="w-16 h-8 border rounded-md px-2 text-sm"
                   />
                 </label>
