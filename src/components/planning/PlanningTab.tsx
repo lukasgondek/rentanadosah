@@ -13,9 +13,6 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [currentCashflow, setCurrentCashflow] = useState(0);
-  const [portfolio0, setPortfolio0] = useState({ propValue: 0, debt: 0, apprPct: 3 });
-  // Rok provedení kroku (T+N) — session-only (planned_investments nemá sloupec)
-  const [stepYears, setStepYears] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const readOnly = !!viewUserId && !isAdmin;
 
@@ -49,24 +46,15 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const targetId = viewUserId || user.id;
-      const [inc, exp, lo, pr] = await Promise.all([
+      const [inc, exp, lo] = await Promise.all([
         supabase.from("income_sources").select("monthly_amount").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
-        supabase.from("loans").select("monthly_payment, remaining_principal").eq("user_id", targetId).eq("is_forecast", false),
-        supabase.from("properties").select("estimated_value, yearly_appreciation_percent").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("loans").select("monthly_payment").eq("user_id", targetId).eq("is_forecast", false),
       ]);
       const ti = (inc.data || []).reduce((s, i) => s + (i.monthly_amount || 0), 0);
       const te = (exp.data || []).reduce((s, e) => s + (e.amount || 0), 0);
       const tl = (lo.data || []).reduce((s, l) => s + (l.monthly_payment || 0), 0);
       setCurrentCashflow(ti - te - tl);
-
-      const propData = pr.data || [];
-      const propValue = propData.reduce((s, p) => s + (p.estimated_value || 0), 0);
-      const debt = (lo.data || []).reduce((s, l) => s + (l.remaining_principal || 0), 0);
-      const apprPct = propData.length > 0
-        ? propData.reduce((s, p) => s + (p.yearly_appreciation_percent || 3), 0) / propData.length
-        : 3;
-      setPortfolio0({ propValue, debt, apprPct });
     };
     fetchCashflow();
   }, [viewUserId]);
@@ -229,65 +217,6 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
     };
   };
 
-  // step_year: lokální stav má přednost, jinak hodnota z DB, jinak 0
-  const getStepYear = (inv: any) => stepYears[inv.id] ?? inv.step_year ?? 0;
-
-  const updateStepYear = async (inv: any, raw: string) => {
-    const y = Math.max(0, Math.min(10, parseInt(raw) || 0));
-    setStepYears((prev) => ({ ...prev, [inv.id]: y }));
-    const { error } = await supabase
-      .from("planned_investments")
-      .update({ step_year: y })
-      .eq("id", inv.id);
-    if (error) {
-      toast({ title: "Chyba", description: "Rok kroku se nepodařilo uložit", variant: "destructive" });
-    }
-  };
-
-  // ── Scénář: časová projekce + řetězení kroků (buy-only) ──
-  // Model: existující portfolio roste (hodnota dle %), dluh se odsplácí
-  // (aproximace 0,14 %/měs jako jinde), hotovost kumuluje roční cashflow.
-  // Krok v roce T+N se aplikuje na začátku roku N a od té doby je součástí
-  // portfolia (compounduje dál). Krok N tak staví na stavu po krocích < N.
-  const computeScenario = () => {
-    const horizons = [1, 2, 5, 10];
-    let cash = 0;
-    let propValue = portfolio0.propValue;
-    let debt = portfolio0.debt;
-    let monthlyCF = currentCashflow;
-    const appr = portfolio0.apprPct / 100;
-    const amort = 1 - 0.0014 * 12;
-    const snapshots: Record<number, any> = {};
-    const applyStepsForYear = (y: number) => {
-      investments.forEach((inv) => {
-        if (getStepYear(inv) !== y) return;
-        const c = calculateValues(inv);
-        propValue += inv.estimated_value || 0;
-        debt += inv.loan_amount || 0;
-        cash += (inv.loan_amount || 0) - (inv.purchase_price || 0);
-        monthlyCF += c.cashflowImpact;
-      });
-    };
-    applyStepsForYear(0); // kroky v T+0 (start)
-    for (let y = 1; y <= 10; y++) {
-      propValue = propValue * (1 + appr);
-      debt = debt * amort;
-      cash += monthlyCF * 12;
-      applyStepsForYear(y);
-      if (horizons.includes(y)) {
-        snapshots[y] = {
-          cash: Math.round(cash),
-          monthlyCF: Math.round(monthlyCF),
-          propValue: Math.round(propValue),
-          debt: Math.round(debt),
-          netWorth: Math.round(propValue + cash - debt),
-        };
-      }
-    }
-    return { horizons, snapshots };
-  };
-  const scenario = computeScenario();
-
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -329,75 +258,6 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
           </div>
         );
       })()}
-
-      {investments.length > 0 && (
-        <div className="rounded-md border p-4 space-y-4">
-          <div>
-            <h3 className="text-lg font-bold">Scénář — časová osa</h3>
-            <p className="text-xs text-muted-foreground">
-              Nastav rok provedení každého kroku (T+N). Každý krok staví na stavu
-              portfolia po předchozích krocích. Model: hodnota roste dle zhodnocení,
-              dluh se odsplácí, hotovost kumuluje roční cashflow.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            {investments.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between gap-3 text-sm border-b last:border-b-0 pb-1.5 last:pb-0">
-                <span className="truncate">{inv.property_identifier}</span>
-                <label className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-muted-foreground">Rok T+</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    value={getStepYear(inv)}
-                    onChange={(e) => updateStepYear(inv, e.target.value)}
-                    className="w-16 h-8 border rounded-md px-2 text-sm"
-                  />
-                </label>
-              </div>
-            ))}
-          </div>
-
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Portfolio v čase</TableHead>
-                  {scenario.horizons.map((h) => (
-                    <TableHead key={h} className="text-right">T+{h} let</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[
-                  ["Hotovost", "cash"],
-                  ["Měsíční cashflow", "monthlyCF"],
-                  ["Hodnota nemovitostí", "propValue"],
-                  ["Dluh", "debt"],
-                  ["Čistý majetek", "netWorth"],
-                ].map(([label, key]) => (
-                  <TableRow key={key}>
-                    <TableCell className="font-medium">{label}</TableCell>
-                    {scenario.horizons.map((h) => {
-                      const v = scenario.snapshots[h]?.[key] ?? 0;
-                      return (
-                        <TableCell
-                          key={h}
-                          className={`text-right ${v < 0 ? "text-red-600" : key === "netWorth" ? "font-semibold text-primary" : ""}`}
-                        >
-                          {formatNumber(v)} Kč
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      )}
 
       <div className="rounded-md border">
         <Table>
