@@ -54,6 +54,8 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
     total: 0,
   });
   const [loanPayments, setLoanPayments] = useState(0);
+  // Reálný cashflow z nemovitostí (NE účetní "rental" z income tabu)
+  const [propertyCash, setPropertyCash] = useState({ rent: 0, expenses: 0 });
   const [netWorth, setNetWorth] = useState({
     current: 0,
     fiveYear: 0,
@@ -144,6 +146,11 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
       const totalLoanPayments = loanData.reduce((sum, loan) => sum + (loan.monthly_payment || 0), 0);
       setLoanPayments(totalLoanPayments);
 
+      // ── Reálný cashflow z nemovitostí (nahrazuje účetní "rental") ──
+      const propRent = propertyData.reduce((sum, p) => sum + (p.monthly_rent || 0), 0);
+      const propExpenses = propertyData.reduce((sum, p) => sum + (p.monthly_expenses || 0), 0);
+      setPropertyCash({ rent: propRent, expenses: propExpenses });
+
       // ── Net Worth ──
       const propertyValue = propertyData.reduce((sum, p) => sum + (p.estimated_value || 0), 0);
       const investmentValue = investmentData.reduce((sum, i) => sum + (i.amount || 0), 0);
@@ -210,7 +217,13 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
     fetchAllData();
   }, [viewUserId]);
 
-  const monthlyCashflow = incomeSummary.total - expenseSummary.total - loanPayments;
+  // Reálný cashflow: příjmy KROMĚ účetního "rental" (po odpisech/úrocích —
+  // ten zůstává jen pro finančáka) + reálný nájem z nemovitostí − výdaje
+  // nemovitostí − ostatní výdaje − splátky.
+  const monthlyCashflow =
+    (incomeSummary.total - incomeSummary.rental)
+    + propertyCash.rent - propertyCash.expenses
+    - expenseSummary.total - loanPayments;
 
   const toMonthlyExpense = (e: any): number => {
     if (e.monthly_amount) return e.monthly_amount;
@@ -363,74 +376,6 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
             icon={TrendingUp}
           />
         )}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Shrnutí příjmů</CardTitle>
-            <CardDescription>Vaše měsíční příjmy podle typu</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Zaměstnanecký</span>
-                <span className="font-medium">{formatCurrency(incomeSummary.employment)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">OSVČ</span>
-                <span className="font-medium">{formatCurrency(incomeSummary.selfEmployed)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Realitní</span>
-                <span className="font-medium">{formatCurrency(incomeSummary.rental)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Firemní</span>
-                <span className="font-medium">{formatCurrency(incomeSummary.business)}</span>
-              </div>
-              {incomeSummary.other > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Ostatní</span>
-                  <span className="font-medium">{formatCurrency(incomeSummary.other)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between border-t pt-3">
-                <span className="font-medium">Celkem měsíčně</span>
-                <span className="font-bold">{formatCurrency(incomeSummary.total)}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Shrnutí výdajů</CardTitle>
-            <CardDescription>Vaše měsíční náklady</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Pravidelné výdaje</span>
-                <span className="font-medium">{formatCurrency(expenseSummary.regular)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Nepravidelné výdaje</span>
-                <span className="font-medium">{formatCurrency(expenseSummary.irregular)}</span>
-              </div>
-              {loanPayments > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Splátky úvěrů</span>
-                  <span className="font-medium">{formatCurrency(loanPayments)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between border-t pt-3">
-                <span className="font-medium">Celkem měsíčně</span>
-                <span className="font-bold">{formatCurrency(expenseSummary.total + loanPayments)}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {!isProspect && forecastSteps.length > 0 && (

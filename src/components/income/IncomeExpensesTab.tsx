@@ -83,6 +83,20 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
   const totalMonthlyIncome = calculateTotalMonthly(incomeSources);
   const monthlyCashflow = totalMonthlyIncome - totalMonthlyExpenses;
 
+  // Shrnutí příjmů podle typu (přesunuto z Dashboardu)
+  const sumByType = (t: string) =>
+    incomeSources.filter((i) => i.type === t).reduce((s, i) => s + (i.monthly_amount || 0), 0);
+  const incomeByType = {
+    employment: sumByType("salary"),
+    selfEmployed: sumByType("self_employed"),
+    rental: sumByType("rental"),
+    business: sumByType("business"),
+    other: sumByType("other"),
+  };
+  const expMonthly = (e: any) => (e.frequency === "yearly" ? (e.amount || 0) / 12 : (e.amount || 0));
+  const expenseRegular = expenses.filter((e: any) => e.is_recurring).reduce((s, e) => s + expMonthly(e), 0);
+  const expenseIrregular = expenses.filter((e: any) => !e.is_recurring).reduce((s, e) => s + expMonthly(e), 0);
+
   return (
     <div className="space-y-6">
       <div>
@@ -121,6 +135,70 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
             <CardContent>
               <div className={`text-2xl font-bold ${monthlyCashflow >= 0 ? "text-green-600" : "text-red-500"}`}>
                 {monthlyCashflow >= 0 ? "+" : ""}{formatCurrency(monthlyCashflow)}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {!loading && (incomeSources.length > 0 || expenses.length > 0) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Shrnutí příjmů</CardTitle>
+              <CardDescription>Měsíční příjmy podle typu</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Zaměstnanecký</span>
+                  <span className="font-medium">{formatCurrency(incomeByType.employment)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">OSVČ</span>
+                  <span className="font-medium">{formatCurrency(incomeByType.selfEmployed)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Realitní</span>
+                  <span className="font-medium">{formatCurrency(incomeByType.rental)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Firemní</span>
+                  <span className="font-medium">{formatCurrency(incomeByType.business)}</span>
+                </div>
+                {incomeByType.other > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Ostatní</span>
+                    <span className="font-medium">{formatCurrency(incomeByType.other)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="font-medium">Celkem měsíčně</span>
+                  <span className="font-bold">{formatCurrency(totalMonthlyIncome)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Shrnutí výdajů</CardTitle>
+              <CardDescription>Měsíční náklady</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Pravidelné výdaje</span>
+                  <span className="font-medium">{formatCurrency(expenseRegular)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Nepravidelné výdaje</span>
+                  <span className="font-medium">{formatCurrency(expenseIrregular)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="font-medium">Celkem měsíčně</span>
+                  <span className="font-bold">{formatCurrency(totalMonthlyExpenses)}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
