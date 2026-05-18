@@ -89,8 +89,9 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
         .eq("user_id", targetUserId)
         .order("created_at", { ascending: false });
 
-      // Zástava = nemovitost jako JEDEN záznam (samostatná jednotka i činžák).
-      // Byty/jednotky se nelistují zvlášť — jsou součástí činžáku.
+      // Zástava = každá nemovitost jako JEDEN záznam (samostatná jednotka
+      // i činžák). Navíc jednotky označené "Katastrálně odděleno" — ty jsou
+      // právně samostatné a dají se zastavit zvlášť.
       const deduped: CollateralOption[] = (props || []).map((p) => ({
         id: `prop_${p.id}`,
         label: p.identifier,
@@ -98,19 +99,33 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
         type: "property" as const,
       }));
 
-      setCollateralOptions(deduped);
-
-      // Legacy: zástava uložená na jednotce → namapuj na rodičovskou nemovitost
-      // (lookup unit_id → property_id, jednotky se ale v nabídce nezobrazují).
       const propIds = (props || []).map((p) => p.id);
-      let unitParent: Record<string, string> = {};
-      if (editData?.id && propIds.length) {
+      const identifierById = Object.fromEntries(
+        (props || []).map((p: any) => [p.id, p.identifier])
+      );
+
+      // Katastrálně oddělené jednotky → samostatné položky v nabídce.
+      // Zároveň lookup unit_id → property_id pro legacy zástavy.
+      const unitParent: Record<string, string> = {};
+      if (propIds.length) {
         const { data: units } = await supabase
           .from("property_units")
-          .select("id, property_id")
+          .select("id, name, estimated_value, property_id, is_cadastrally_separated")
           .in("property_id", propIds);
-        unitParent = Object.fromEntries((units || []).map((u: any) => [u.id, u.property_id]));
+        for (const u of units || []) {
+          unitParent[u.id] = u.property_id;
+          if (u.is_cadastrally_separated && u.estimated_value) {
+            deduped.push({
+              id: `unit_${u.id}`,
+              label: `${identifierById[u.property_id] || ""} → ${u.name}`,
+              estimatedValue: u.estimated_value,
+              type: "unit" as const,
+            });
+          }
+        }
       }
+
+      setCollateralOptions(deduped);
 
       // Load existing collaterals if editing
       if (editData?.id) {
@@ -121,7 +136,19 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
 
         if (existingCollaterals && existingCollaterals.length > 0) {
           const loaded: CollateralEntry[] = existingCollaterals.map((c: any) => {
-            // Jednotka → rodičovská nemovitost (byty jsou uvnitř činžáku)
+            // Katastrálně oddělená jednotka zůstane jednotkou (je v nabídce);
+            // jinak nekatastrální jednotka → rodičovská nemovitost (činžák).
+            if (c.property_unit_id) {
+              const unitOpt = deduped.find((o) => o.id === `unit_${c.property_unit_id}`);
+              if (unitOpt) {
+                return {
+                  sourceId: `unit_${c.property_unit_id}`,
+                  sourceType: "unit" as const,
+                  amount: c.collateral_amount?.toString() || "",
+                  label: unitOpt.label,
+                };
+              }
+            }
             const propId = c.property_id || (c.property_unit_id ? unitParent[c.property_unit_id] : null);
             if (propId) {
               const opt = deduped.find((o) => o.id === `prop_${propId}`);

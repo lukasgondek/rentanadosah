@@ -72,6 +72,31 @@ export default function LoansTab({ userId: viewUserId, isAdmin = false }: { user
         {!readOnly && <LoanDialog onSuccess={fetchLoans} userId={viewUserId || undefined} />}
       </div>
 
+      {(() => {
+        const totalDebt = loans.reduce((s, l) => s + (l.remaining_principal || 0), 0);
+        const totalInterest = loans.reduce(
+          (s, l) => s + (l.remaining_principal || 0) * ((l.interest_rate || 0) / 100 / 12),
+          0
+        );
+        const totalPayment = loans.reduce((s, l) => s + (l.monthly_payment || 0), 0);
+        return (
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-md border p-4">
+              <p className="text-sm text-muted-foreground">Celková zadluženost</p>
+              <p className="text-2xl font-bold">{formatNumber(totalDebt)} Kč</p>
+            </div>
+            <div className="rounded-md border p-4">
+              <p className="text-sm text-muted-foreground">Měsíční úroky</p>
+              <p className="text-2xl font-bold">{formatNumber(Math.round(totalInterest))} Kč</p>
+            </div>
+            <div className="rounded-md border p-4">
+              <p className="text-sm text-muted-foreground">Měsíční splátky</p>
+              <p className="text-2xl font-bold">{formatNumber(totalPayment)} Kč</p>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
