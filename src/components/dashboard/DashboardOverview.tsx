@@ -415,17 +415,6 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow className="bg-muted/30">
-                  <TableCell className="font-medium">Aktuálně</TableCell>
-                  <TableCell>—</TableCell>
-                  <TableCell className="text-right">—</TableCell>
-                  <TableCell className="text-right font-semibold">
-                    {formatCurrency(incomeSummary.total - expenseSummary.total - loanPayments)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    {formatCurrency(netWorth.current)}
-                  </TableCell>
-                </TableRow>
                 {forecastSteps.map((step) => (
                   <TableRow key={step.step}>
                     <TableCell className="font-medium">Krok {step.step}</TableCell>

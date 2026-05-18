@@ -314,7 +314,7 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
                   <TableCell className="font-medium whitespace-nowrap">
                     Rok {year}{year === 0 ? " (letos)" : ""}
                   </TableCell>
-                  <TableCell className="font-medium">{inv.property_identifier}</TableCell>
+                  <TableCell className="font-medium">{inv.plan_name || inv.property_identifier}</TableCell>
                   <TableCell className="text-right">{formatNumber(calc.netAnnualRentProfit)} Kč</TableCell>
                   <TableCell className="text-right">{formatNumber(calc.annualAppreciationProfit)} Kč</TableCell>
                   <TableCell className={`text-right font-semibold ${calc.cashflowImpact < 0 ? "text-red-600" : ""}`}>

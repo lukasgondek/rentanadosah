@@ -42,6 +42,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     ltv_percent: editData?.ltv_percent?.toString() || "80",
     term_months: editData ? Math.round(editData.term_months / 12).toString() : "25",
     step_year: editData?.step_year?.toString() || "0",
+    plan_name: editData?.plan_name || "",
   });
 
   const [currentDashboardCashflow, setCurrentDashboardCashflow] = useState(0);
@@ -91,6 +92,27 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     }, 0);
     return Math.max(0, projValue(p) - used);
   };
+
+  // Auto-název plánu skládaný z akcí (placeholder, lze přepsat)
+  const autoPlanName = (() => {
+    const parts: string[] = [];
+    if (buyExpanded && formData.property_identifier?.trim()) {
+      const ev = parseFloat(formData.estimated_value) || 0;
+      parts.push(`nákup ${formData.property_identifier.trim()}${ev ? ` +${fmtNum(ev)},-` : ""}`);
+    }
+    if (financeExpanded && (parseFloat(formData.loan_amount) || 0) > 0) {
+      parts.push(`úvěr ${fmtNum(parseFloat(formData.loan_amount) || 0)}`);
+    }
+    const refiNames = availableLoans
+      .filter((l) => refinancedLoanIds.includes(l.id))
+      .map((l) => l.name || "úvěr");
+    if (refiNames.length) parts.push(`refinanc ${refiNames.join(", ")}`);
+    const soldNames = availableProperties
+      .filter((p) => soldPropertyIds.includes(p.id))
+      .map((p) => p.identifier);
+    if (soldNames.length) parts.push(`prodej ${soldNames.join(", ")}`);
+    return parts.join(" + ");
+  })();
 
   const [calculations, setCalculations] = useState({
     cashflow: 0,
@@ -376,6 +398,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       ltv_percent: ltvInput ?? ltvComputed,
       term_months: termYears * 12,
       step_year: parseInt(formData.step_year) || 0,
+      plan_name: formData.plan_name?.trim() || autoPlanName || null,
     };
 
     let error;
@@ -413,6 +436,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       ltv_percent: "",
       term_months: "",
       step_year: "0",
+      plan_name: "",
     });
     setRefinancedLoanIds([]);
     setCollateralPropIds([]);
@@ -923,6 +947,18 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
               </div>
             )}
 
+          </div>
+
+          <div className="space-y-1.5 border-t pt-4">
+            <Label>Název plánu (nepovinné)</Label>
+            <Input
+              value={formData.plan_name}
+              onChange={(e) => setFormData({ ...formData, plan_name: e.target.value })}
+              placeholder={autoPlanName || "Např. nákup Vinohrady +5.200.000,- + refinanc ČSOB"}
+            />
+            <p className="text-xs text-muted-foreground">
+              Nevyplníš-li, uloží se automatický návrh z akcí (lze přepsat).
+            </p>
           </div>
 
           <div className="flex justify-end gap-2">
