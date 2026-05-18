@@ -7,12 +7,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber as fmtNumber, calculateAnnuity } from "@/lib/utils";
+import { computePlanImpact, type PlanImpactCtx } from "@/lib/planImpact";
 
 export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { userId?: string | null; isAdmin?: boolean } = {}) {
   const [investments, setInvestments] = useState<any[]>([]);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [currentCashflow, setCurrentCashflow] = useState(0);
+  const [impactCtx, setImpactCtx] = useState<PlanImpactCtx>({ loansById: {}, propsById: {} });
   const { toast } = useToast();
   const readOnly = !!viewUserId && !isAdmin;
 
@@ -48,12 +50,23 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const targetId = viewUserId || user.id;
-      const [inc, exp, lo, pr] = await Promise.all([
+      const [inc, exp, lo, pr, lcRes] = await Promise.all([
         supabase.from("income_sources").select("type, category, expense_type, income_amount, monthly_amount, real_net_monthly").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
-        supabase.from("loans").select("monthly_payment").eq("user_id", targetId).eq("is_forecast", false),
-        supabase.from("properties").select("monthly_rent, monthly_expenses").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("loans").select("id, monthly_payment, remaining_principal, interest_rate, ltv_percent").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("properties").select("id, monthly_rent, monthly_expenses, estimated_value, purchase_price, yearly_appreciation_percent, loan_id").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("loan_collaterals").select("property_id, loan_id"),
       ]);
+      // Kontext pro výpočet dopadu plánů (refinanc/prodej potřebuje úvěry/nemovitosti)
+      const loansById: Record<string, any> = Object.fromEntries((lo.data || []).map((l: any) => [l.id, l]));
+      const propsById: Record<string, any> = Object.fromEntries((pr.data || []).map((p: any) => {
+        const fromJ = (lcRes.data || []).filter((r: any) => r.property_id === p.id).map((r: any) => loansById[r.loan_id]).filter(Boolean);
+        const legacy = p.loan_id && loansById[p.loan_id] ? [loansById[p.loan_id]] : [];
+        const seen = new Set<string>();
+        const boundLoans = [...fromJ, ...legacy].filter((l: any) => (seen.has(l.id) ? false : (seen.add(l.id), true)));
+        return [p.id, { ...p, boundLoans }];
+      }));
+      setImpactCtx({ loansById, propsById });
       const realNonRental = (inc.data || [])
         .filter((i: any) => i.type !== "rental")
         .reduce((s: number, i: any) => {
@@ -241,7 +254,7 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
   let _cum = 0;
   const stepRows = orderedSteps.map((inv) => {
     _cum += getOffset(inv);
-    return { inv, year: _cum, calc: calculateValues(inv) };
+    return { inv, year: _cum, impact: computePlanImpact(inv, impactCtx) };
   });
 
   return (
@@ -254,9 +267,10 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
       {investments.length > 0 && (() => {
         const agg = investments.reduce(
           (a, inv) => {
-            const c = calculateValues(inv);
-            a.cash += c.cashImpact;
-            a.cfImpact += c.cashflowImpact;
+            const im = computePlanImpact(inv, impactCtx); // celý dopad (vč. refinanc/prodej/reko)
+            const c = calculateValues(inv); // buy-profit metriky
+            a.cash += im.cashImpact;
+            a.cfImpact += im.cashflowImpact;
             a.rentProfit += c.netAnnualRentProfit;
             a.profitAppr += c.netAnnualProfit;
             a.p5 += c.profit5Years;
@@ -292,11 +306,9 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
             <TableRow>
               <TableHead>Krok</TableHead>
               <TableHead>Plán</TableHead>
-              <TableHead className="text-right">Zisk na nájmech / rok</TableHead>
-              <TableHead className="text-right">Zisk na nárůstu hodnoty / rok</TableHead>
-              <TableHead className="text-right">Měs. cashflow</TableHead>
-              <TableHead className="text-right">Čistý zisk 5 let</TableHead>
-              <TableHead className="text-right">Čistý zisk 10 let</TableHead>
+              <TableHead className="text-right">Měsíční cashflow dopad</TableHead>
+              <TableHead className="text-right">Jednorázová hotovost</TableHead>
+              <TableHead className="text-right">Zisk 10 let</TableHead>
               <TableHead className="text-right">Měs. zisk zpětně</TableHead>
               {!readOnly && <TableHead className="text-right">Akce</TableHead>}
             </TableRow>
@@ -304,25 +316,29 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
           <TableBody>
             {stepRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
                   Žádné plánované investice
                 </TableCell>
               </TableRow>
             ) : (
-              stepRows.map(({ inv, year, calc }) => (
+              stepRows.map(({ inv, year, impact }) => (
                 <TableRow key={inv.id}>
                   <TableCell className="font-medium whitespace-nowrap">
                     Rok {year}{year === 0 ? " (letos)" : ""}
                   </TableCell>
                   <TableCell className="font-medium">{inv.plan_name || inv.property_identifier}</TableCell>
-                  <TableCell className="text-right">{formatNumber(calc.netAnnualRentProfit)} Kč</TableCell>
-                  <TableCell className="text-right">{formatNumber(calc.annualAppreciationProfit)} Kč</TableCell>
-                  <TableCell className={`text-right font-semibold ${calc.cashflowImpact < 0 ? "text-red-600" : ""}`}>
-                    {formatNumber(calc.cashflowImpact)} Kč
+                  <TableCell className={`text-right font-semibold ${impact.cashflowImpact < 0 ? "text-red-600" : ""}`}>
+                    {impact.cashflowImpact >= 0 ? "+" : ""}{formatNumber(Math.round(impact.cashflowImpact))} Kč
                   </TableCell>
-                  <TableCell className="text-right text-primary">{formatNumber(Math.round(calc.profit5Years))} Kč</TableCell>
-                  <TableCell className="text-right font-semibold text-primary">{formatNumber(Math.round(calc.profit10Years))} Kč</TableCell>
-                  <TableCell className="text-right">{formatNumber(Math.round(calc.profit10Years / 120))} Kč</TableCell>
+                  <TableCell className={`text-right ${impact.cashImpact < 0 ? "text-red-600" : ""}`}>
+                    {formatNumber(Math.round(impact.cashImpact))} Kč
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-primary">
+                    {impact.buyActive ? `${formatNumber(Math.round(impact.profit10Years))} Kč` : "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {impact.buyActive ? `${formatNumber(Math.round(impact.profit10Monthly))} Kč` : "—"}
+                  </TableCell>
                   {!readOnly && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
