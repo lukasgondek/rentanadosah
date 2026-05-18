@@ -173,7 +173,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
         supabase.from("loans").select("id, name, monthly_payment, remaining_principal, interest_rate, ltv_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("properties").select("id, identifier, estimated_value, purchase_price, monthly_rent, monthly_expenses, loan_id, yearly_appreciation_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("loan_collaterals").select("property_id, loan_id"),
-        supabase.from("property_units").select("id, property_id, name, monthly_rent, estimated_value"),
+        supabase.from("property_units").select("id, property_id, name, monthly_rent, estimated_value, is_cadastrally_separated"),
       ]);
 
       // REÁLNÝ základ cashflow (stejná logika jako Dashboard/Příjmy):
@@ -920,9 +920,12 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                 const selProp = availableProperties.find((p) => p.id === formData.reno_property_id);
                 const propUnits = allUnits.filter((u) => u.property_id === formData.reno_property_id);
                 const selUnit = propUnits.find((u) => u.id === formData.reno_unit_id);
-                const valueBefore = selUnit
+                // Katastrálně oddělený byt má vlastní odhad; jinak (a u
+                // celé nemovitosti) bereme odhad celé nemovitosti.
+                const propValue = selProp ? (selProp.estimated_value || selProp.purchase_price || 0) : 0;
+                const valueBefore = selUnit && selUnit.is_cadastrally_separated
                   ? (selUnit.estimated_value || 0)
-                  : (selProp ? (selProp.estimated_value || selProp.purchase_price || 0) : 0);
+                  : propValue;
                 const inv = parseFloat(formData.reno_investment) || 0;
                 const inc = parseFloat(formData.reno_rent_increase) || 0;
                 const after = parseFloat(formData.reno_value_after) || 0;
