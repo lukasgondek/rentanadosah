@@ -13,6 +13,9 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [currentCashflow, setCurrentCashflow] = useState(0);
+  // Odstup kroku = roky PO předchozím kroku (0 = hned). Persistováno do
+  // planned_investments.step_year. Kumulativní rok = součet odstupů.
+  const [stepYears, setStepYears] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const readOnly = !!viewUserId && !isAdmin;
 
@@ -209,6 +212,7 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
       monthlyPayment,
       monthlyInterest,
       netAnnualRentProfit,
+      annualAppreciationProfit,
       netAnnualProfit,
       profit5Years,
       profit10Years,
@@ -216,6 +220,30 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
       cashflowImpact: cashflow - monthlyPayment,
     };
   };
+
+  const getOffset = (inv: any) => stepYears[inv.id] ?? inv.step_year ?? 0;
+
+  const updateOffset = async (inv: any, raw: string) => {
+    const y = Math.max(0, Math.min(30, parseInt(raw) || 0));
+    setStepYears((prev) => ({ ...prev, [inv.id]: y }));
+    const { error } = await supabase
+      .from("planned_investments")
+      .update({ step_year: y })
+      .eq("id", inv.id);
+    if (error) {
+      toast({ title: "Chyba", description: "Odstup kroku se nepodařilo uložit", variant: "destructive" });
+    }
+  };
+
+  // Kroky v pořadí (nejstarší = krok 1). Kumulativní rok = součet odstupů.
+  const orderedSteps = [...investments].sort(
+    (a, b) => (a.created_at || "").localeCompare(b.created_at || "")
+  );
+  let _cum = 0;
+  const stepRows = orderedSteps.map((inv) => {
+    _cum += getOffset(inv);
+    return { inv, year: _cum, calc: calculateValues(inv) };
+  });
 
   return (
     <div className="space-y-4">
@@ -263,75 +291,76 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Identifikátor</TableHead>
-              <TableHead className="text-right">Kupní cena (Kč)</TableHead>
-              <TableHead className="text-right">Odhadní cena (Kč)</TableHead>
-              <TableHead className="text-right">Měs. nájem (Kč)</TableHead>
-              <TableHead className="text-right">Měs. výdaje (Kč)</TableHead>
-              <TableHead className="text-right">Cashflow (Kč)</TableHead>
-              <TableHead className="text-right">Výše úvěru (Kč)</TableHead>
-              <TableHead className="text-right">Úrok (%)</TableHead>
-              <TableHead className="text-right">LTV (%)</TableHead>
-              <TableHead className="text-right">Měs. splátka (Kč)</TableHead>
-              <TableHead className="text-right">Čistý roční zisk (Kč)</TableHead>
-              <TableHead className="text-right">Akce</TableHead>
+              <TableHead>Krok</TableHead>
+              <TableHead>Plán</TableHead>
+              <TableHead className="text-right">Zisk na nájmech / rok</TableHead>
+              <TableHead className="text-right">Zisk na nárůstu hodnoty / rok</TableHead>
+              <TableHead className="text-right">Měs. cashflow</TableHead>
+              <TableHead className="text-right">Čistý zisk 5 let</TableHead>
+              <TableHead className="text-right">Čistý zisk 10 let</TableHead>
+              {!readOnly && <TableHead className="text-right">Odstup</TableHead>}
+              {!readOnly && <TableHead className="text-right">Akce</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {investments.length === 0 ? (
+            {stepRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   Žádné plánované investice
                 </TableCell>
               </TableRow>
             ) : (
-              investments.map((inv) => {
-                const calc = calculateValues(inv);
-                return (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-medium">{inv.property_identifier}</TableCell>
-                    <TableCell className="text-right">{formatNumber(inv.purchase_price)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(inv.estimated_value)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(inv.monthly_rent)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(inv.monthly_expenses)}</TableCell>
-                    <TableCell className="text-right font-semibold">{formatNumber(calc.cashflow)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(inv.loan_amount)}</TableCell>
-                    <TableCell className="text-right">{inv.interest_rate}%</TableCell>
-                    <TableCell className="text-right">{inv.ltv_percent}%</TableCell>
-                    <TableCell className="text-right">{formatNumber(calc.monthlyPayment)}</TableCell>
-                    <TableCell className="text-right font-semibold text-primary">{formatNumber(calc.netAnnualProfit)}</TableCell>
-                    {!readOnly && (
+              stepRows.map(({ inv, year, calc }) => (
+                <TableRow key={inv.id}>
+                  <TableCell className="font-medium whitespace-nowrap">
+                    Rok {year}{year === 0 ? " (letos)" : ""}
+                  </TableCell>
+                  <TableCell className="font-medium">{inv.property_identifier}</TableCell>
+                  <TableCell className="text-right">{formatNumber(calc.netAnnualRentProfit)} Kč</TableCell>
+                  <TableCell className="text-right">{formatNumber(calc.annualAppreciationProfit)} Kč</TableCell>
+                  <TableCell className={`text-right font-semibold ${calc.cashflowImpact < 0 ? "text-red-600" : ""}`}>
+                    {formatNumber(calc.cashflowImpact)} Kč
+                  </TableCell>
+                  <TableCell className="text-right text-primary">{formatNumber(Math.round(calc.profit5Years))} Kč</TableCell>
+                  <TableCell className="text-right font-semibold text-primary">{formatNumber(Math.round(calc.profit10Years))} Kč</TableCell>
+                  {!readOnly && (
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-muted-foreground text-xs">+</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={30}
+                          value={getOffset(inv)}
+                          onChange={(e) => updateOffset(inv, e.target.value)}
+                          className="w-14 h-8 border rounded-md px-2 text-sm"
+                          title="Roky po předchozím kroku"
+                        />
+                        <span className="text-muted-foreground text-xs">let</span>
+                      </div>
+                    </TableCell>
+                  )}
+                  {!readOnly && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          title="Realizovat"
+                        <Button size="sm" variant="ghost" title="Realizovat"
                           onClick={() => setRealizingId(inv.id)}
-                          className="text-green-600 hover:text-green-700"
-                        >
+                          className="text-green-600 hover:text-green-700">
                           <CheckCircle2 className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditingInvestment(inv)}
-                        >
+                        <Button size="sm" variant="ghost" title="Upravit (obsah plánu)"
+                          onClick={() => setEditingInvestment(inv)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setDeletingId(inv.id)}
-                        >
+                        <Button size="sm" variant="ghost"
+                          onClick={() => setDeletingId(inv.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })
+                  )}
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>
