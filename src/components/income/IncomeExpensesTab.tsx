@@ -80,8 +80,33 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
     return sum + monthly;
   }, 0);
 
-  const totalMonthlyIncome = calculateTotalMonthly(incomeSources);
-  const monthlyCashflow = totalMonthlyIncome - totalMonthlyExpenses;
+  // monthly_amount = daňový základ/12 (employment: čistá mzda). To je číslo
+  // PRO FINANČÁKA / bonitu.
+  const totalTaxBaseIncome = calculateTotalMonthly(incomeSources);
+
+  // "Reálně zůstává" = skutečná hotovost. Liší se od daň. základu jen
+  // u OSVČ/nájmu s PAUŠÁLNÍMI VÝDAJI % — paušál není reálný výdaj, takže
+  // reálně zůstává (zatím bez přesných odvodů) celý příjem. Ostatní typy
+  // (zaměstnání, paušální daň, skutečné výdaje, firemní, ostatní) =
+  // daňový základ = reálná hotovost.
+  const realNetMonthly = (inv: any) => {
+    const flatRate =
+      (inv.category === "self_employed_s7" || inv.category === "rental_s9") &&
+      inv.expense_type === "flat_rate" &&
+      inv.income_amount;
+    if (flatRate) return (inv.income_amount || 0) / 12;
+    return inv.monthly_amount || 0;
+  };
+  const totalRealIncome = incomeSources.reduce((s, i) => s + realNetMonthly(i), 0);
+  const hasFlatRate = incomeSources.some(
+    (i) =>
+      (i.category === "self_employed_s7" || i.category === "rental_s9") &&
+      i.expense_type === "flat_rate"
+  );
+
+  const totalMonthlyIncome = totalTaxBaseIncome; // zpětná kompat (tabulky)
+  // Cashflow jede z REÁLNÉ hotovosti, ne z daňového základu.
+  const monthlyCashflow = totalRealIncome - totalMonthlyExpenses;
 
   // Shrnutí příjmů podle typu (přesunuto z Dashboardu)
   const sumByType = (t: string) =>
@@ -110,12 +135,15 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Příjmy celkem/měs</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Reálně zůstává/měs</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(totalMonthlyIncome)}
+                {formatCurrency(totalRealIncome)}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Daňový základ (pro finančáka): {formatCurrency(totalTaxBaseIncome)}
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -173,9 +201,19 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t pt-3">
-                  <span className="font-medium">Celkem měsíčně</span>
-                  <span className="font-bold">{formatCurrency(totalMonthlyIncome)}</span>
+                  <span className="font-medium">Daňový základ (pro finančáka)</span>
+                  <span className="font-bold">{formatCurrency(totalTaxBaseIncome)}</span>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-green-700">Reálně zůstává</span>
+                  <span className="font-bold text-green-700">{formatCurrency(totalRealIncome)}</span>
+                </div>
+                {hasFlatRate && (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    U paušálu (výdaje %) je „reálně zůstává" zatím celý příjem —
+                    přesné odečtení daně/odvodů (ruční pole) doplníme po odblokování DB.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -335,9 +373,9 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm">Příjmy/měs:</span>
+                      <span className="text-sm">Příjmy/měs (reálně):</span>
                       <span className="font-bold text-green-600">
-                        +{formatCurrency(totalMonthlyIncome)}
+                        +{formatCurrency(totalRealIncome)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">

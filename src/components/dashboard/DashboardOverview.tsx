@@ -56,6 +56,7 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
   const [loanPayments, setLoanPayments] = useState(0);
   // Reálný cashflow z nemovitostí (NE účetní "rental" z income tabu)
   const [propertyCash, setPropertyCash] = useState({ rent: 0, expenses: 0 });
+  const [realIncomeNonRental, setRealIncomeNonRental] = useState(0);
   const [netWorth, setNetWorth] = useState({
     current: 0,
     fiveYear: 0,
@@ -124,6 +125,18 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
       const totalIncome = employment + selfEmployed + rental + business + other;
 
       setIncomeSummary({ employment, selfEmployed, rental, business, other, total: totalIncome });
+
+      // Reálná hotovost z příjmů KROMĚ "rental" (ten nahrazuje reálný nájem
+      // z nemovitostí). Paušál (výdaje %) → reálně celý příjem, ne daň. základ.
+      const realNonRental = incomeData
+        .filter(item => item.type !== "rental")
+        .reduce((sum, item) => {
+          const flatRate =
+            (item.category === "self_employed_s7" || item.category === "rental_s9") &&
+            item.expense_type === "flat_rate" && item.income_amount;
+          return sum + (flatRate ? (item.income_amount || 0) / 12 : (item.monthly_amount || 0));
+        }, 0);
+      setRealIncomeNonRental(realNonRental);
 
       // ── Expenses ──
       const toMonthly = (e: { amount?: number | null; frequency?: string | null; is_recurring?: boolean | null; monthly_amount?: number | null; yearly_amount?: number | null }) => {
@@ -221,7 +234,7 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
   // ten zůstává jen pro finančáka) + reálný nájem z nemovitostí − výdaje
   // nemovitostí − ostatní výdaje − splátky.
   const monthlyCashflow =
-    (incomeSummary.total - incomeSummary.rental)
+    realIncomeNonRental
     + propertyCash.rent - propertyCash.expenses
     - expenseSummary.total - loanPayments;
 
