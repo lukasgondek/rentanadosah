@@ -50,6 +50,8 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   const [refinancedLoanIds, setRefinancedLoanIds] = useState<string[]>([]);
   // Prodej nemovitosti: kazda prodavana ma rozhodnuti co s vazanym uverem
   const [availableProperties, setAvailableProperties] = useState<any[]>([]);
+  // Stávající nemovitosti použité jako zástava pro tento plánovaný úvěr
+  const [collateralPropIds, setCollateralPropIds] = useState<string[]>([]);
   const [soldPropertyIds, setSoldPropertyIds] = useState<string[]>([]);
   // propId -> 'payoff' (splatit uver z prodeje) | 'move' (presunout zastavu)
   const [loanActionByProp, setLoanActionByProp] = useState<Record<string, "payoff" | "move">>({});
@@ -59,6 +61,36 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   const [buyExpanded, setBuyExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [refiExpanded, setRefiExpanded] = useState(false);
+
+  // Projekce stávajícího portfolia k času odstupu — jeden zdroj pravdy
+  // (používá výpočet i UI seznamy, ať čísla sedí).
+  const offsetYears = parseInt(formData.step_year) || 0;
+  const projRemaining = (l: any) => {
+    const P = l.remaining_principal || 0;
+    if (offsetYears <= 0) return P;
+    const i = ((l.interest_rate || 0) / 100) / 12;
+    const n = offsetYears * 12;
+    const M = l.monthly_payment || 0;
+    if (M <= 0) return P;
+    const B = i > 0
+      ? P * Math.pow(1 + i, n) - M * ((Math.pow(1 + i, n) - 1) / i)
+      : P - M * n;
+    return Math.max(0, B);
+  };
+  const projValue = (p: any) => {
+    const v = p.estimated_value || 0;
+    if (offsetYears <= 0) return v;
+    const a = ((p.yearly_appreciation_percent ?? 3) as number) / 100;
+    return v * Math.pow(1 + a, offsetYears);
+  };
+  // Volná zástava nemovitosti k času odstupu (LTV default 80)
+  const projFreeCollateral = (p: any) => {
+    const used = (p.boundLoans || []).reduce((s: number, l: any) => {
+      const ltv = ((l.ltv_percent ?? 80) as number) / 100;
+      return s + (ltv > 0 ? projRemaining(l) / ltv : projRemaining(l));
+    }, 0);
+    return Math.max(0, projValue(p) - used);
+  };
 
   const [calculations, setCalculations] = useState({
     cashflow: 0,
@@ -94,7 +126,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       const [incomeRes, expensesRes, loansRes, propsRes, lcRes] = await Promise.all([
         supabase.from("income_sources").select("type, category, expense_type, income_amount, monthly_amount, real_net_monthly").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
-        supabase.from("loans").select("id, name, monthly_payment, remaining_principal, interest_rate").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("loans").select("id, name, monthly_payment, remaining_principal, interest_rate, ltv_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("properties").select("id, identifier, estimated_value, monthly_rent, monthly_expenses, loan_id, yearly_appreciation_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("loan_collaterals").select("property_id, loan_id"),
       ]);
@@ -230,28 +262,6 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
 
       profit10Years += yearCashflow - yearlyInterest + yearAppreciation;
     }
-
-    // Časový odstup transakce: stávající portfolio se promítne k +N letům —
-    // úvěry odsplacené (menší jistina), nemovitosti narostlé (vyšší hodnota).
-    const offsetYears = parseInt(formData.step_year) || 0;
-    const projRemaining = (l: any) => {
-      const P = l.remaining_principal || 0;
-      if (offsetYears <= 0) return P;
-      const i = ((l.interest_rate || 0) / 100) / 12;
-      const n = offsetYears * 12;
-      const M = l.monthly_payment || 0;
-      if (M <= 0) return P;
-      const B = i > 0
-        ? P * Math.pow(1 + i, n) - M * ((Math.pow(1 + i, n) - 1) / i)
-        : P - M * n;
-      return Math.max(0, B);
-    };
-    const projValue = (p: any) => {
-      const v = p.estimated_value || 0;
-      if (offsetYears <= 0) return v;
-      const a = ((p.yearly_appreciation_percent ?? 3) as number) / 100;
-      return v * Math.pow(1 + a, offsetYears);
-    };
 
     // Refinancované úvěry zmizí → jejich splátka už cashflow nezatěžuje.
     // currentDashboardCashflow má všechny splátky odečtené, proto je vrátíme.
@@ -405,6 +415,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       step_year: "0",
     });
     setRefinancedLoanIds([]);
+    setCollateralPropIds([]);
     setSoldPropertyIds([]);
     setLoanActionByProp({});
     setMoveTargetByProp({});
@@ -640,6 +651,43 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                 />
               </div>
             </div>
+
+            {availableProperties.length > 0 && (
+              <div className="space-y-2 border-t pt-3">
+                <Label className="text-sm font-semibold">Zástava — stávající nemovitosti</Label>
+                <p className="text-xs text-muted-foreground">
+                  Použij stávající nemovitost jako zástavu a vytáhni víc peněz.
+                  {offsetYears > 0
+                    ? ` K roku +${offsetYears} jsou hodnoty narostlé a úvěry odsplacené → vyšší volná zástava.`
+                    : " Volná zástava = kolik lze ještě zastavit (hodnota − jistina/LTV)."}
+                </p>
+                <div className="space-y-1.5 rounded-md border p-3">
+                  {availableProperties.map((p) => (
+                    <div key={p.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`coll-${p.id}`}
+                        checked={collateralPropIds.includes(p.id)}
+                        onCheckedChange={(c) =>
+                          setCollateralPropIds((prev) =>
+                            c ? [...prev, p.id] : prev.filter((x) => x !== p.id)
+                          )
+                        }
+                      />
+                      <Label htmlFor={`coll-${p.id}`} className="text-sm font-normal cursor-pointer">
+                        {p.identifier} — hodnota {formatNumber(Math.round(projValue(p)))} Kč,
+                        {" volná zástava "}
+                        <span className="font-semibold text-primary">
+                          {formatNumber(Math.round(projFreeCollateral(p)))} Kč
+                        </span>
+                        {offsetYears > 0 && (
+                          <span className="text-muted-foreground"> (za {offsetYears} let)</span>
+                        )}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             </>
             )}
           </div>
@@ -673,7 +721,14 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                       }
                     />
                     <Label htmlFor={`refi-${loan.id}`} className="text-sm font-normal cursor-pointer">
-                      {loan.name || "Úvěr"} (splátka {formatNumber(loan.monthly_payment || 0)} Kč/měs)
+                      {loan.name || "Úvěr"} — splátka {formatNumber(loan.monthly_payment || 0)} Kč/měs
+                      {", zbývá "}
+                      {formatNumber(Math.round(projRemaining(loan)))} Kč
+                      {offsetYears > 0 && (
+                        <span className="text-muted-foreground">
+                          {" "}(za {offsetYears} let; dnes {formatNumber(Math.round(loan.remaining_principal || 0))})
+                        </span>
+                      )}
                     </Label>
                   </div>
                 ))}
