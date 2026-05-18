@@ -57,7 +57,7 @@ export default function PropertiesTab({ userId: viewUserId, isAdmin = false }: {
     setProperties(
       props.map((p: any) => ({
         ...p,
-        free_collateral: Math.max(0, (p.estimated_value || 0) - (consumedByProp[p.id] || 0)),
+        free_collateral: Math.max(0, ((p.estimated_value || p.purchase_price || 0)) - (consumedByProp[p.id] || 0)),
       }))
     );
   };
@@ -98,6 +98,34 @@ export default function PropertiesTab({ userId: viewUserId, isAdmin = false }: {
         <h2 className="text-2xl font-bold">Nemovitosti</h2>
         {!readOnly && <PropertyDialog onSuccess={fetchProperties} userId={viewUserId || undefined} />}
       </div>
+
+      {properties.length > 0 && (() => {
+        const value = (p: any) => p.estimated_value || p.purchase_price || 0;
+        const totalValue = properties.reduce((s, p) => s + value(p), 0);
+        const realizedGrowth = properties.reduce(
+          (s, p) => s + (value(p) - (p.purchase_price || 0)), 0
+        );
+        const freeCollateral = properties.reduce((s, p) => s + (p.free_collateral || 0), 0);
+        const rentProfit = properties.reduce(
+          (s, p) => s + ((p.monthly_rent || 0) - (p.monthly_expenses || 0)), 0
+        );
+        const cell = (label: string, val: number, accent = false) => (
+          <div className="rounded-md border p-4">
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className={`text-xl font-bold ${val < 0 ? "text-red-600" : accent ? "text-primary" : ""}`}>
+              {formatNumber(Math.round(val))} Kč
+            </p>
+          </div>
+        );
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {cell("Celková hodnota portfolia", totalValue, true)}
+            {cell("Realizovaný nárůst", realizedGrowth)}
+            {cell("Volná zástavní hodnota", freeCollateral)}
+            {cell("Nájemní zisk / měs", rentProfit)}
+          </div>
+        );
+      })()}
 
       <div className="rounded-md border">
         <Table>

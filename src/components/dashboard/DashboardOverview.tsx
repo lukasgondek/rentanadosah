@@ -166,7 +166,9 @@ const DashboardOverview = ({ userId: viewUserId, isProspect = false }: { userId?
       setPropertyCash({ rent: propRent, expenses: propExpenses });
 
       // ── Net Worth ──
-      const propertyValue = propertyData.reduce((sum, p) => sum + (p.estimated_value || 0), 0);
+      // Odhadní hodnota first, fallback na kupní cenu (jinak by se
+      // nemovitost bez odhadu do Net Worth vůbec nezapočítala).
+      const propertyValue = propertyData.reduce((sum, p) => sum + (p.estimated_value || p.purchase_price || 0), 0);
       const investmentValue = investmentData.reduce((sum, i) => sum + (i.amount || 0), 0);
       const totalDebt = loanData.reduce((sum, l) => sum + (l.remaining_principal || 0), 0);
       const currentNetWorth = propertyValue + investmentValue - totalDebt;
