@@ -55,6 +55,9 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   // propId -> cilova nemovitost pro presun zastavy (informativni)
   const [moveTargetByProp, setMoveTargetByProp] = useState<Record<string, string>>({});
   const [sellExpanded, setSellExpanded] = useState(false);
+  const [buyExpanded, setBuyExpanded] = useState(false);
+  const [financeExpanded, setFinanceExpanded] = useState(false);
+  const [refiExpanded, setRefiExpanded] = useState(false);
 
   const [calculations, setCalculations] = useState({
     cashflow: 0,
@@ -234,9 +237,12 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       }
     }
 
-    const currentCashflowImpact = cashflow - monthlyPayment;
-    const cashflowAfterTransaction =
-      currentDashboardCashflow + currentCashflowImpact + refinancedPayments + soldCashflowDelta;
+    // Dopad CELÉ transakce na měsíční cashflow (nákup + refinanc + prodej),
+    // ne jen nové nemovitosti — jinak je číslo zkreslené když plánuješ
+    // např. jen prodej.
+    const currentCashflowImpact =
+      (cashflow - monthlyPayment) + refinancedPayments + soldCashflowDelta;
+    const cashflowAfterTransaction = currentDashboardCashflow + currentCashflowImpact;
 
     // Hotovost po transakci: načerpání nad kupní cenu (kladné) nebo doplatek
     // z hotovosti (záporné) + výtěžky z prodeje − splacené úvěry.
@@ -382,7 +388,15 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Property Details */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Údaje o nemovitosti</h3>
+            <button
+              type="button"
+              onClick={() => setBuyExpanded((v) => !v)}
+              className="font-semibold text-lg flex items-center gap-2 hover:underline"
+            >
+              {buyExpanded ? "▾" : "▸"} Koupit nemovitost
+            </button>
+            {buyExpanded && (
+            <>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Identifikátor nemovitosti *</Label>
@@ -467,11 +481,21 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                 />
               </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* Loan Details */}
           <div className="space-y-4 border-t pt-4">
-            <h3 className="font-semibold text-lg">Údaje o úvěru</h3>
+            <button
+              type="button"
+              onClick={() => setFinanceExpanded((v) => !v)}
+              className="font-semibold text-lg flex items-center gap-2 hover:underline"
+            >
+              {financeExpanded ? "▾" : "▸"} Financování
+            </button>
+            {financeExpanded && (
+            <>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Výše úvěru (Kč) *</Label>
@@ -552,12 +576,22 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                 />
               </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* Refinancovat úvěr */}
           {availableLoans.length > 0 && (
             <div className="space-y-3 border-t pt-4">
-              <h3 className="font-semibold text-lg">Refinancovat úvěr</h3>
+              <button
+                type="button"
+                onClick={() => setRefiExpanded((v) => !v)}
+                className="font-semibold text-lg flex items-center gap-2 hover:underline"
+              >
+                {refiExpanded ? "▾" : "▸"} Refinancovat úvěr
+              </button>
+              {refiExpanded && (
+              <>
               <p className="text-xs text-muted-foreground">
                 Vybrané úvěry se v rámci této transakce „nahradí" — jejich měsíční
                 splátka přestane zatěžovat cashflow (promítne se do plánovaných čísel).
@@ -580,6 +614,8 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                   </div>
                 ))}
               </div>
+              </>
+              )}
             </div>
           )}
 

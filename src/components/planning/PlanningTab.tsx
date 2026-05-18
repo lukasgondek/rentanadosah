@@ -12,6 +12,7 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
   const [investments, setInvestments] = useState<any[]>([]);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [currentCashflow, setCurrentCashflow] = useState(0);
   const { toast } = useToast();
   const readOnly = !!viewUserId && !isAdmin;
 
@@ -37,6 +38,25 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
 
   useEffect(() => {
     fetchInvestments();
+  }, [viewUserId]);
+
+  // Stávající cashflow (příjmy − výdaje − splátky) pro "Výsledné cashflow"
+  useEffect(() => {
+    const fetchCashflow = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const targetId = viewUserId || user.id;
+      const [inc, exp, lo] = await Promise.all([
+        supabase.from("income_sources").select("monthly_amount").eq("user_id", targetId),
+        supabase.from("expenses").select("amount").eq("user_id", targetId),
+        supabase.from("loans").select("monthly_payment").eq("user_id", targetId).eq("is_forecast", false),
+      ]);
+      const ti = (inc.data || []).reduce((s, i) => s + (i.monthly_amount || 0), 0);
+      const te = (exp.data || []).reduce((s, e) => s + (e.amount || 0), 0);
+      const tl = (lo.data || []).reduce((s, l) => s + (l.monthly_payment || 0), 0);
+      setCurrentCashflow(ti - te - tl);
+    };
+    fetchCashflow();
   }, [viewUserId]);
 
   const handleDelete = async (id: string) => {
@@ -131,30 +151,69 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
     fetchInvestments();
   };
 
-  // Calculate derived values for display
+  // Calculate derived values — STEJNÉ vzorce jako PlannedInvestmentDialog
+  // (neprůstřelná čísla — musí sedět s tím, co klient vidí v dialogu).
   const calculateValues = (inv: any) => {
     const monthlyRent = inv.monthly_rent || 0;
     const monthlyExpenses = inv.monthly_expenses || 0;
     const cashflow = monthlyRent - monthlyExpenses;
 
-    // Monthly payment calculation
-    const monthlyRate = (inv.interest_rate || 0) / 100 / 12;
+    const interestRate = inv.interest_rate || 0;
+    const loanAmount = inv.loan_amount || 0;
+    const estimatedValue = inv.estimated_value || 0;
+    const appreciationPercent = inv.appreciation_percent || 0;
+    const rentGrowthPercent = inv.rent_growth_percent || 0;
+    const monthlyRate = interestRate / 100 / 12;
     const termMonths = inv.term_months || 0;
+
     let monthlyPayment = 0;
-    if (inv.loan_amount > 0 && monthlyRate > 0 && termMonths > 0) {
-      monthlyPayment = inv.loan_amount * (monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / (Math.pow(1 + monthlyRate, termMonths) - 1);
+    if (loanAmount > 0 && monthlyRate > 0 && termMonths > 0) {
+      monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / (Math.pow(1 + monthlyRate, termMonths) - 1);
     }
 
-    const monthlyInterest = inv.loan_amount * monthlyRate;
+    const monthlyInterest = loanAmount * monthlyRate;
     const netAnnualRentProfit = (cashflow * 12) - (monthlyInterest * 12);
-    const annualAppreciationProfit = inv.estimated_value * ((inv.appreciation_percent || 0) / 100);
+    const annualAppreciationProfit = estimatedValue * (appreciationPercent / 100);
     const netAnnualProfit = netAnnualRentProfit + annualAppreciationProfit;
+
+    // Zisk za 5 / 10 let — složené úročení nájmu + klesající úrok
+    let profit5Years = 0;
+    let currentRent = monthlyRent;
+    let currentValue = estimatedValue;
+    let remainingPrincipal = loanAmount;
+    for (let year = 1; year <= 5; year++) {
+      currentRent = currentRent * (1 + rentGrowthPercent / 100);
+      const yearCashflow = (currentRent - monthlyExpenses) * 12;
+      const yearlyInterest = remainingPrincipal * (interestRate / 100);
+      remainingPrincipal = remainingPrincipal * (1 - 0.0014 * 12);
+      currentValue = currentValue * (1 + appreciationPercent / 100);
+      const yearAppreciation = currentValue * (appreciationPercent / 100);
+      profit5Years += yearCashflow - yearlyInterest + yearAppreciation;
+    }
+    let profit10Years = profit5Years;
+    currentRent = monthlyRent * Math.pow(1 + rentGrowthPercent / 100, 5);
+    currentValue = estimatedValue * Math.pow(1 + appreciationPercent / 100, 5);
+    remainingPrincipal = loanAmount * Math.pow(1 - 0.0014 * 12, 5);
+    for (let year = 6; year <= 10; year++) {
+      currentRent = currentRent * (1 + rentGrowthPercent / 100);
+      const yearCashflow = (currentRent - monthlyExpenses) * 12;
+      const yearlyInterest = remainingPrincipal * (interestRate / 100);
+      remainingPrincipal = remainingPrincipal * (1 - 0.0014 * 12);
+      currentValue = currentValue * (1 + appreciationPercent / 100);
+      const yearAppreciation = currentValue * (appreciationPercent / 100);
+      profit10Years += yearCashflow - yearlyInterest + yearAppreciation;
+    }
 
     return {
       cashflow,
       monthlyPayment,
       monthlyInterest,
+      netAnnualRentProfit,
       netAnnualProfit,
+      profit5Years,
+      profit10Years,
+      cashImpact: loanAmount - (inv.purchase_price || 0),
+      cashflowImpact: cashflow - monthlyPayment,
     };
   };
 
@@ -164,6 +223,41 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
         <h2 className="text-2xl font-bold">Plánování investic</h2>
         {!readOnly && <PlannedInvestmentDialog onSuccess={fetchInvestments} userId={viewUserId || undefined} />}
       </div>
+
+      {investments.length > 0 && (() => {
+        const agg = investments.reduce(
+          (a, inv) => {
+            const c = calculateValues(inv);
+            a.cash += c.cashImpact;
+            a.cfImpact += c.cashflowImpact;
+            a.rentProfit += c.netAnnualRentProfit;
+            a.profitAppr += c.netAnnualProfit;
+            a.p5 += c.profit5Years;
+            a.p10 += c.profit10Years;
+            return a;
+          },
+          { cash: 0, cfImpact: 0, rentProfit: 0, profitAppr: 0, p5: 0, p10: 0 }
+        );
+        const cell = (label: string, val: number, accent = false) => (
+          <div className="rounded-md border p-4">
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className={`text-xl font-bold ${val < 0 ? "text-red-600" : accent ? "text-primary" : ""}`}>
+              {formatNumber(Math.round(val))} Kč
+            </p>
+          </div>
+        );
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {cell("Hotovost (souhrn plánů)", agg.cash)}
+            {cell("Dopad na cashflow (jen transakcí)", agg.cfImpact)}
+            {cell("Výsledné cashflow", currentCashflow + agg.cfImpact, true)}
+            {cell("Roční zisk na nájmech", agg.rentProfit)}
+            {cell("Roční zisk s nárůstem hodnoty", agg.profitAppr)}
+            {cell("Zisk za 5 let", agg.p5, true)}
+            {cell("Zisk za 10 let", agg.p10, true)}
+          </div>
+        );
+      })()}
 
       <div className="rounded-md border">
         <Table>
