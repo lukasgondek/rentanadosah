@@ -145,6 +145,17 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   useEffect(() => {
     if (editData) {
       setOpen(true);
+      // Načti uložený refinanc/prodej výběr (jsonb sloupce)
+      if (Array.isArray(editData.refinanced_loan_ids)) setRefinancedLoanIds(editData.refinanced_loan_ids);
+      if (Array.isArray(editData.sold_property_ids)) setSoldPropertyIds(editData.sold_property_ids);
+      if (editData.sold_loan_actions && typeof editData.sold_loan_actions === "object") {
+        setLoanActionByProp(editData.sold_loan_actions);
+      }
+      if (editData.reno_property_id) setRenoExpanded(true);
+      if (Array.isArray(editData.refinanced_loan_ids) && editData.refinanced_loan_ids.length) setRefiExpanded(true);
+      if (Array.isArray(editData.sold_property_ids) && editData.sold_property_ids.length) setSellExpanded(true);
+      if ((editData.loan_amount || 0) > 0) setFinanceExpanded(true);
+      if ((editData.purchase_price || 0) > 0 || (editData.estimated_value || 0) > 0) setBuyExpanded(true);
     }
   }, [editData]);
 
@@ -370,22 +381,30 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       toast({ title: "Chyba validace", description: msg, variant: "destructive" });
     };
 
-    if (!formData.property_identifier.trim()) { showError("Vyplňte identifikátor nemovitosti"); return; }
-    const purchasePrice = parseNum(formData.purchase_price);
-    const estimatedValue = parseNum(formData.estimated_value);
-    const monthlyRent = parseNum(formData.monthly_rent);
-    const monthlyExpenses = parseNum(formData.monthly_expenses);
-    const loanAmount = parseNum(formData.loan_amount);
-    const interestRate = parseNum(formData.interest_rate);
-    const termYears = parseNum(formData.term_months);
+    // Sekce přispívá jen když je rozbalená — plán je libovolná kombinace
+    // (nákup / financ / refinanc / prodej / reko). Ukládá se jen to aktivní.
+    const anySection = buyExpanded || financeExpanded || refiExpanded || sellExpanded || renoExpanded;
+    if (!anySection) { showError("Rozbalte aspoň jednu sekci — co chcete naplánovat"); return; }
 
-    if (!purchasePrice || purchasePrice <= 0) { showError("Vyplňte kupní cenu"); return; }
-    if (!estimatedValue || estimatedValue <= 0) { showError("Vyplňte odhadní cenu"); return; }
-    if (monthlyRent === undefined || monthlyRent < 0) { showError("Vyplňte měsíční nájem"); return; }
-    if (monthlyExpenses === undefined || monthlyExpenses < 0) { showError("Vyplňte měsíční výdaje"); return; }
-    if (!loanAmount || loanAmount <= 0) { showError("Vyplňte výši úvěru"); return; }
-    if (interestRate === undefined || interestRate < 0) { showError("Vyplňte úrokovou sazbu"); return; }
-    if (!termYears || termYears <= 0) { showError("Vyplňte dobu splatnosti"); return; }
+    let purchasePrice = 0, estimatedValue = 0, monthlyRent = 0, monthlyExpenses = 0;
+    if (buyExpanded) {
+      if (!formData.property_identifier.trim()) { showError("Vyplňte identifikátor nemovitosti"); return; }
+      purchasePrice = parseNum(formData.purchase_price) ?? 0;
+      estimatedValue = parseNum(formData.estimated_value) ?? 0;
+      monthlyRent = parseNum(formData.monthly_rent) ?? 0;
+      monthlyExpenses = parseNum(formData.monthly_expenses) ?? 0;
+      if (purchasePrice <= 0) { showError("Vyplňte kupní cenu"); return; }
+      if (estimatedValue <= 0) { showError("Vyplňte odhadní cenu"); return; }
+    }
+    let loanAmount = 0, interestRate = 0, termYears = 0;
+    if (financeExpanded) {
+      loanAmount = parseNum(formData.loan_amount) ?? 0;
+      interestRate = parseNum(formData.interest_rate) ?? 0;
+      termYears = parseNum(formData.term_months) ?? 0;
+      if (loanAmount <= 0) { showError("Vyplňte výši úvěru"); return; }
+      if (interestRate < 0) { showError("Vyplňte úrokovou sazbu"); return; }
+      if (!termYears || termYears <= 0) { showError("Vyplňte dobu splatnosti"); return; }
+    }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -401,9 +420,13 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     const ltvInput = parseNum(formData.ltv_percent);
     const ltvComputed = estimatedValue > 0 ? (loanAmount / estimatedValue) * 100 : 0;
 
+    const propIdent = buyExpanded
+      ? formData.property_identifier.trim()
+      : (formData.plan_name?.trim() || autoPlanName || "Plán");
+
     const dataToSave = {
       user_id: userId || user.id,
-      property_identifier: formData.property_identifier.trim(),
+      property_identifier: propIdent,
       purchase_price: purchasePrice,
       estimated_value: estimatedValue,
       monthly_rent: monthlyRent,
@@ -421,6 +444,9 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       reno_investment: parseNum(formData.reno_investment) ?? null,
       reno_rent_increase: parseNum(formData.reno_rent_increase) ?? null,
       reno_value_after: parseNum(formData.reno_value_after) ?? null,
+      refinanced_loan_ids: refinancedLoanIds,
+      sold_property_ids: soldPropertyIds,
+      sold_loan_actions: loanActionByProp,
     };
 
     let error;
