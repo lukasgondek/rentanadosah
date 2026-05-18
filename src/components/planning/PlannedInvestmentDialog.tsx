@@ -47,6 +47,14 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   // Refinancování: vybrané úvěry "zmizí" → jejich splátka se vrátí do cashflow
   const [availableLoans, setAvailableLoans] = useState<any[]>([]);
   const [refinancedLoanIds, setRefinancedLoanIds] = useState<string[]>([]);
+  // Prodej nemovitosti: kazda prodavana ma rozhodnuti co s vazanym uverem
+  const [availableProperties, setAvailableProperties] = useState<any[]>([]);
+  const [soldPropertyIds, setSoldPropertyIds] = useState<string[]>([]);
+  // propId -> 'payoff' (splatit uver z prodeje) | 'move' (presunout zastavu)
+  const [loanActionByProp, setLoanActionByProp] = useState<Record<string, "payoff" | "move">>({});
+  // propId -> cilova nemovitost pro presun zastavy (informativni)
+  const [moveTargetByProp, setMoveTargetByProp] = useState<Record<string, string>>({});
+  const [sellExpanded, setSellExpanded] = useState(false);
 
   const [calculations, setCalculations] = useState({
     cashflow: 0,
@@ -62,6 +70,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     current_cashflow_impact: 0,
     cashflow_after_transaction: 0,
     cash_remaining: 0,
+    cash_after_transaction: 0,
   });
 
   useEffect(() => {
@@ -77,18 +86,40 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       if (!user) return;
       const targetId = userId || user.id;
 
-      // Parallel fetch income, expenses, loans
-      const [incomeRes, expensesRes, loansRes] = await Promise.all([
+      // Parallel fetch income, expenses, loans, properties, vazby
+      const [incomeRes, expensesRes, loansRes, propsRes, lcRes] = await Promise.all([
         supabase.from("income_sources").select("monthly_amount").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
-        supabase.from("loans").select("id, name, monthly_payment").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("loans").select("id, name, monthly_payment, remaining_principal").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("properties").select("id, identifier, estimated_value, monthly_rent, monthly_expenses, loan_id").eq("user_id", targetId).eq("is_forecast", false),
+        supabase.from("loan_collaterals").select("property_id, loan_id"),
       ]);
 
       const totalIncome = (incomeRes.data || []).reduce((sum, i) => sum + (i.monthly_amount || 0), 0);
       const totalExpenses = (expensesRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
       const totalLoanPayments = (loansRes.data || []).reduce((sum, l) => sum + (l.monthly_payment || 0), 0);
 
-      setAvailableLoans(loansRes.data || []);
+      const loansList = loansRes.data || [];
+      const loanById: Record<string, any> = Object.fromEntries(loansList.map((l: any) => [l.id, l]));
+
+      // Pro každou nemovitost najdi vázané úvěry (loan_collaterals + legacy loan_id)
+      const props = (propsRes.data || []).map((p: any) => {
+        const fromJunction = (lcRes.data || [])
+          .filter((r: any) => r.property_id === p.id)
+          .map((r: any) => loanById[r.loan_id])
+          .filter(Boolean);
+        const legacy = p.loan_id && loanById[p.loan_id] ? [loanById[p.loan_id]] : [];
+        const seen = new Set<string>();
+        const boundLoans = [...fromJunction, ...legacy].filter((l: any) => {
+          if (seen.has(l.id)) return false;
+          seen.add(l.id);
+          return true;
+        });
+        return { ...p, boundLoans };
+      });
+
+      setAvailableLoans(loansList);
+      setAvailableProperties(props);
       setCurrentDashboardCashflow(totalIncome - totalExpenses - totalLoanPayments);
     };
     fetchCashflow();
@@ -185,11 +216,33 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       .filter((l) => refinancedLoanIds.includes(l.id))
       .reduce((sum, l) => sum + (l.monthly_payment || 0), 0);
 
+    // Prodej nemovitostí: ubyde čistý nájem (rent − expenses) z cashflow;
+    // při "splatit úvěr" se navíc uvolní splátka (cashflow) a z prodeje se
+    // odečte zbývající jistina (hotovost). Při "přesunout" úvěr běží dál.
+    let soldCashflowDelta = 0;
+    let soldCashProceeds = 0;
+    for (const p of availableProperties) {
+      if (!soldPropertyIds.includes(p.id)) continue;
+      soldCashflowDelta -= (p.monthly_rent || 0) - (p.monthly_expenses || 0);
+      soldCashProceeds += p.estimated_value || 0;
+      const action = loanActionByProp[p.id] || "payoff";
+      if (action === "payoff") {
+        for (const l of p.boundLoans || []) {
+          soldCashflowDelta += l.monthly_payment || 0;
+          soldCashProceeds -= l.remaining_principal || 0;
+        }
+      }
+    }
+
     const currentCashflowImpact = cashflow - monthlyPayment;
     const cashflowAfterTransaction =
-      currentDashboardCashflow + currentCashflowImpact + refinancedPayments;
+      currentDashboardCashflow + currentCashflowImpact + refinancedPayments + soldCashflowDelta;
 
-    // Cash remaining: when loan > purchase price
+    // Hotovost po transakci: načerpání nad kupní cenu (kladné) nebo doplatek
+    // z hotovosti (záporné) + výtěžky z prodeje − splacené úvěry.
+    const cashAfterTransaction = (loanAmount - purchasePrice) + soldCashProceeds;
+
+    // Cash remaining (jen kladné — informativní hláška): úvěr > kupní cena
     const cashRemaining = loanAmount > purchasePrice ? loanAmount - purchasePrice : 0;
 
     setCalculations({
@@ -206,8 +259,9 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       current_cashflow_impact: currentCashflowImpact,
       cashflow_after_transaction: cashflowAfterTransaction,
       cash_remaining: cashRemaining,
+      cash_after_transaction: cashAfterTransaction,
     });
-  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds]);
+  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds, availableProperties, soldPropertyIds, loanActionByProp]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,6 +352,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       term_months: "",
     });
     setRefinancedLoanIds([]);
+    setSoldPropertyIds([]);
+    setLoanActionByProp({});
+    setMoveTargetByProp({});
+    setSellExpanded(false);
     setOpen(false);
     onSuccess();
   };
@@ -525,6 +583,100 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
             </div>
           )}
 
+          {/* Prodat nemovitost */}
+          {availableProperties.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <button
+                type="button"
+                onClick={() => setSellExpanded((v) => !v)}
+                className="font-semibold text-lg flex items-center gap-2 hover:underline"
+              >
+                {sellExpanded ? "▾" : "▸"} Prodat nemovitost
+              </button>
+              {sellExpanded && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Vybraná nemovitost se v rámci transakce prodá (počítá se s odhadní
+                    cenou). U vázaného úvěru zvol, zda ho splatit z prodeje, nebo
+                    přesunout zástavu na jinou nemovitost.
+                  </p>
+                  <div className="space-y-2 rounded-md border p-3">
+                    {availableProperties.map((p) => {
+                      const sold = soldPropertyIds.includes(p.id);
+                      const action = loanActionByProp[p.id] || "payoff";
+                      const hasLoan = (p.boundLoans || []).length > 0;
+                      return (
+                        <div key={p.id} className="space-y-2 border-b last:border-b-0 pb-2 last:pb-0">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`sell-${p.id}`}
+                              checked={sold}
+                              onCheckedChange={(c) =>
+                                setSoldPropertyIds((prev) =>
+                                  c ? [...prev, p.id] : prev.filter((x) => x !== p.id)
+                                )
+                              }
+                            />
+                            <Label htmlFor={`sell-${p.id}`} className="text-sm font-normal cursor-pointer">
+                              {p.identifier} (odhad {formatNumber(p.estimated_value || 0)} Kč)
+                              {hasLoan && (
+                                <span className="text-muted-foreground"> — vázaný úvěr</span>
+                              )}
+                            </Label>
+                          </div>
+                          {sold && hasLoan && (
+                            <div className="ml-6 space-y-1.5 text-sm">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`loanaction-${p.id}`}
+                                  checked={action === "payoff"}
+                                  onChange={() =>
+                                    setLoanActionByProp((prev) => ({ ...prev, [p.id]: "payoff" }))
+                                  }
+                                />
+                                Splatit úvěr z prodeje
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`loanaction-${p.id}`}
+                                  checked={action === "move"}
+                                  onChange={() =>
+                                    setLoanActionByProp((prev) => ({ ...prev, [p.id]: "move" }))
+                                  }
+                                />
+                                Přesunout zástavu na jinou nemovitost
+                              </label>
+                              {action === "move" && (
+                                <select
+                                  className="w-full h-8 text-sm border rounded-md px-2"
+                                  value={moveTargetByProp[p.id] || ""}
+                                  onChange={(e) =>
+                                    setMoveTargetByProp((prev) => ({ ...prev, [p.id]: e.target.value }))
+                                  }
+                                >
+                                  <option value="">— vyber cílovou nemovitost —</option>
+                                  {availableProperties
+                                    .filter((o) => o.id !== p.id && !soldPropertyIds.includes(o.id))
+                                    .map((o) => (
+                                      <option key={o.id} value={o.id}>
+                                        {o.identifier}
+                                      </option>
+                                    ))}
+                                </select>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Calculated Results */}
           <div className="space-y-4 border-t pt-4 bg-muted/30 p-4 rounded-lg">
             <h3 className="font-semibold text-lg">Vypočítané výsledky</h3>
@@ -591,6 +743,18 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                   disabled
                   className={`font-semibold ${calculations.cashflow_after_transaction < 0 ? "bg-red-50 text-red-600" : "bg-background"}`}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Hotovost po transakci (Kč)</Label>
+                <Input
+                  value={formatNumber(calculations.cash_after_transaction)}
+                  disabled
+                  className={`font-semibold ${calculations.cash_after_transaction < 0 ? "bg-red-50 text-red-600" : "bg-background"}`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Načerpání nad kupní cenu a výtěžky z prodeje (−) splacené úvěry.
+                  Záporné = doplatek z hotovosti.
+                </p>
               </div>
             </div>
 
