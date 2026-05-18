@@ -713,7 +713,13 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
             </div>
           )}
 
-          {/* Calculated Results */}
+          {/* Calculated Results — až když uživatel řekne co chce dělat */}
+          {!(buyExpanded || financeExpanded || refiExpanded || sellExpanded) ? (
+            <div className="border-t pt-4 text-sm text-muted-foreground">
+              Rozbalte „Koupit nemovitost", „Financování", „Refinancovat úvěr"
+              nebo „Prodat nemovitost" — výsledky se spočítají podle toho, co plánujete.
+            </div>
+          ) : (
           <div className="space-y-4 border-t pt-4 bg-muted/30 p-4 rounded-lg">
             <h3 className="font-semibold text-lg">Vypočítané výsledky</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -814,6 +820,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
               </div>
             )}
           </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
