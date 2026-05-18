@@ -91,14 +91,27 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
 
       // Parallel fetch income, expenses, loans, properties, vazby
       const [incomeRes, expensesRes, loansRes, propsRes, lcRes] = await Promise.all([
-        supabase.from("income_sources").select("monthly_amount").eq("user_id", targetId),
+        supabase.from("income_sources").select("type, category, expense_type, income_amount, monthly_amount, real_net_monthly").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
         supabase.from("loans").select("id, name, monthly_payment, remaining_principal").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("properties").select("id, identifier, estimated_value, monthly_rent, monthly_expenses, loan_id").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("loan_collaterals").select("property_id, loan_id"),
       ]);
 
-      const totalIncome = (incomeRes.data || []).reduce((sum, i) => sum + (i.monthly_amount || 0), 0);
+      // REÁLNÝ základ cashflow (stejná logika jako Dashboard/Příjmy):
+      // příjmy KROMĚ účetního "rental" (nahrazuje reálný nájem z nemovitostí),
+      // override real_net_monthly, paušál výdaje % → celý příjem.
+      const realNonRental = (incomeRes.data || [])
+        .filter((i: any) => i.type !== "rental")
+        .reduce((sum: number, i: any) => {
+          if (i.real_net_monthly != null) return sum + i.real_net_monthly;
+          const flatRate =
+            (i.category === "self_employed_s7" || i.category === "rental_s9") &&
+            i.expense_type === "flat_rate" && i.income_amount;
+          return sum + (flatRate ? (i.income_amount || 0) / 12 : (i.monthly_amount || 0));
+        }, 0);
+      const propRent = (propsRes.data || []).reduce((s: number, p: any) => s + (p.monthly_rent || 0), 0);
+      const propExpenses = (propsRes.data || []).reduce((s: number, p: any) => s + (p.monthly_expenses || 0), 0);
       const totalExpenses = (expensesRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
       const totalLoanPayments = (loansRes.data || []).reduce((sum, l) => sum + (l.monthly_payment || 0), 0);
 
@@ -123,22 +136,26 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
 
       setAvailableLoans(loansList);
       setAvailableProperties(props);
-      setCurrentDashboardCashflow(totalIncome - totalExpenses - totalLoanPayments);
+      setCurrentDashboardCashflow(
+        realNonRental + propRent - propExpenses - totalExpenses - totalLoanPayments
+      );
     };
     fetchCashflow();
   }, []);
 
   // Calculate all derived values
   useEffect(() => {
-    const monthlyRent = parseFloat(formData.monthly_rent) || 0;
-    const monthlyExpenses = parseFloat(formData.monthly_expenses) || 0;
-    const loanAmount = parseFloat(formData.loan_amount) || 0;
-    const interestRate = parseFloat(formData.interest_rate) || 0;
-    const termYears = parseFloat(formData.term_months) || 0;
-    const purchasePrice = parseFloat(formData.purchase_price) || 0;
-    const estimatedValue = parseFloat(formData.estimated_value) || 0;
-    const appreciationPercent = parseFloat(formData.appreciation_percent) || 5;
-    const rentGrowthPercent = parseFloat(formData.rent_growth_percent) || 5;
+    // Sekce přispívá do výpočtu, až když je rozbalená. Dokud ne → nuly
+    // (Výsledky jsou vidět, ale prázdné, dokud uživatel neřekne co plánuje).
+    const monthlyRent = buyExpanded ? (parseFloat(formData.monthly_rent) || 0) : 0;
+    const monthlyExpenses = buyExpanded ? (parseFloat(formData.monthly_expenses) || 0) : 0;
+    const purchasePrice = buyExpanded ? (parseFloat(formData.purchase_price) || 0) : 0;
+    const estimatedValue = buyExpanded ? (parseFloat(formData.estimated_value) || 0) : 0;
+    const appreciationPercent = buyExpanded ? (parseFloat(formData.appreciation_percent) || 5) : 0;
+    const rentGrowthPercent = buyExpanded ? (parseFloat(formData.rent_growth_percent) || 5) : 0;
+    const loanAmount = financeExpanded ? (parseFloat(formData.loan_amount) || 0) : 0;
+    const interestRate = financeExpanded ? (parseFloat(formData.interest_rate) || 0) : 0;
+    const termYears = financeExpanded ? (parseFloat(formData.term_months) || 0) : 0;
 
     // Cashflow
     const cashflow = monthlyRent - monthlyExpenses;
@@ -267,7 +284,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       cash_remaining: cashRemaining,
       cash_after_transaction: cashAfterTransaction,
     });
-  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds, availableProperties, soldPropertyIds, loanActionByProp]);
+  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds, availableProperties, soldPropertyIds, loanActionByProp, buyExpanded, financeExpanded]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -713,13 +730,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
             </div>
           )}
 
-          {/* Calculated Results — až když uživatel řekne co chce dělat */}
-          {!(buyExpanded || financeExpanded || refiExpanded || sellExpanded) ? (
-            <div className="border-t pt-4 text-sm text-muted-foreground">
-              Rozbalte „Koupit nemovitost", „Financování", „Refinancovat úvěr"
-              nebo „Prodat nemovitost" — výsledky se spočítají podle toho, co plánujete.
-            </div>
-          ) : (
+          {/* Calculated Results — vždy viditelné; nuly dokud uživatel nerozbalí sekci */}
           <div className="space-y-4 border-t pt-4 bg-muted/30 p-4 rounded-lg">
             <h3 className="font-semibold text-lg">Vypočítané výsledky</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -820,7 +831,6 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
               </div>
             )}
           </div>
-          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
