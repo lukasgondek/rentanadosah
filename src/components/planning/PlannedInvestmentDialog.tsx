@@ -957,6 +957,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                           onValueChange={(v) => setFormData({ ...formData, reno_value_after: v })}
                           placeholder={valueBefore ? formatNumber(valueBefore) : "nový odhad"}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          Aktuální odhad: {valueBefore ? `${formatNumber(valueBefore)} Kč` : "—"}.
+                          Zhodnocení se počítá z rozdílu (hodnota po − aktuální odhad).
+                        </p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
