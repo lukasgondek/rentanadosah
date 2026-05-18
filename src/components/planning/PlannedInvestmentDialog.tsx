@@ -43,6 +43,11 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
     term_months: editData ? Math.round(editData.term_months / 12).toString() : "25",
     step_year: editData?.step_year?.toString() || "0",
     plan_name: editData?.plan_name || "",
+    reno_property_id: editData?.reno_property_id || "",
+    reno_unit_id: editData?.reno_unit_id || "",
+    reno_investment: editData?.reno_investment?.toString() || "",
+    reno_rent_increase: editData?.reno_rent_increase?.toString() || "",
+    reno_value_after: editData?.reno_value_after?.toString() || "",
   });
 
   const [currentDashboardCashflow, setCurrentDashboardCashflow] = useState(0);
@@ -62,6 +67,8 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   const [buyExpanded, setBuyExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [refiExpanded, setRefiExpanded] = useState(false);
+  const [renoExpanded, setRenoExpanded] = useState(false);
+  const [allUnits, setAllUnits] = useState<any[]>([]);
 
   // Projekce stávajícího portfolia k času odstupu — jeden zdroj pravdy
   // (používá výpočet i UI seznamy, ať čísla sedí).
@@ -111,6 +118,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       .filter((p) => soldPropertyIds.includes(p.id))
       .map((p) => p.identifier);
     if (soldNames.length) parts.push(`prodej ${soldNames.join(", ")}`);
+    if (renoExpanded && (parseFloat(formData.reno_investment) || 0) > 0) {
+      const rp = availableProperties.find((p) => p.id === formData.reno_property_id);
+      parts.push(`rekonstrukce ${rp ? rp.identifier : ""} ${fmtNum(parseFloat(formData.reno_investment) || 0)}`.trim());
+    }
     return parts.join(" + ");
   })();
 
@@ -145,12 +156,13 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       const targetId = userId || user.id;
 
       // Parallel fetch income, expenses, loans, properties, vazby
-      const [incomeRes, expensesRes, loansRes, propsRes, lcRes] = await Promise.all([
+      const [incomeRes, expensesRes, loansRes, propsRes, lcRes, unitsRes] = await Promise.all([
         supabase.from("income_sources").select("type, category, expense_type, income_amount, monthly_amount, real_net_monthly").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
         supabase.from("loans").select("id, name, monthly_payment, remaining_principal, interest_rate, ltv_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("properties").select("id, identifier, estimated_value, purchase_price, monthly_rent, monthly_expenses, loan_id, yearly_appreciation_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("loan_collaterals").select("property_id, loan_id"),
+        supabase.from("property_units").select("id, property_id, name, monthly_rent, estimated_value"),
       ]);
 
       // REÁLNÝ základ cashflow (stejná logika jako Dashboard/Příjmy):
@@ -191,6 +203,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
 
       setAvailableLoans(loansList);
       setAvailableProperties(props);
+      setAllUnits(unitsRes.data || []);
       setCurrentDashboardCashflow(
         realNonRental + propRent - propExpenses - totalExpenses - totalLoanPayments
       );
@@ -314,16 +327,20 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       }
     }
 
-    // Dopad CELÉ transakce na měsíční cashflow (nákup + refinanc + prodej),
-    // ne jen nové nemovitosti — jinak je číslo zkreslené když plánuješ
-    // např. jen prodej.
+    // Rekonstrukce: navýšení nájmu → +cashflow; investice → −hotovost.
+    const renoInvest = renoExpanded ? (parseFloat(formData.reno_investment) || 0) : 0;
+    const renoRentInc = renoExpanded ? (parseFloat(formData.reno_rent_increase) || 0) : 0;
+
+    // Dopad CELÉ transakce na měsíční cashflow (nákup + refinanc + prodej +
+    // rekonstrukce) — ne jen nové nemovitosti.
     const currentCashflowImpact =
-      (cashflow - monthlyPayment) + refinancedPayments + soldCashflowDelta;
+      (cashflow - monthlyPayment) + refinancedPayments + soldCashflowDelta + renoRentInc;
     const cashflowAfterTransaction = currentDashboardCashflow + currentCashflowImpact;
 
     // Hotovost po transakci: načerpání nad kupní cenu (kladné) nebo doplatek
-    // z hotovosti (záporné) + výtěžky z prodeje − splacené úvěry.
-    const cashAfterTransaction = (loanAmount - purchasePrice) + soldCashProceeds - refinancedPayoff;
+    // z hotovosti (záporné) + výtěžky z prodeje − splacené úvěry − reko.
+    const cashAfterTransaction =
+      (loanAmount - purchasePrice) + soldCashProceeds - refinancedPayoff - renoInvest;
 
     // Cash remaining (jen kladné — informativní hláška): úvěr > kupní cena
     const cashRemaining = loanAmount > purchasePrice ? loanAmount - purchasePrice : 0;
@@ -344,7 +361,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       cash_remaining: cashRemaining,
       cash_after_transaction: cashAfterTransaction,
     });
-  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds, availableProperties, soldPropertyIds, loanActionByProp, buyExpanded, financeExpanded]);
+  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds, availableProperties, soldPropertyIds, loanActionByProp, buyExpanded, financeExpanded, renoExpanded]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -399,6 +416,11 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       term_months: termYears * 12,
       step_year: parseInt(formData.step_year) || 0,
       plan_name: formData.plan_name?.trim() || autoPlanName || null,
+      reno_property_id: formData.reno_property_id || null,
+      reno_unit_id: formData.reno_unit_id || null,
+      reno_investment: parseNum(formData.reno_investment) ?? null,
+      reno_rent_increase: parseNum(formData.reno_rent_increase) ?? null,
+      reno_value_after: parseNum(formData.reno_value_after) ?? null,
     };
 
     let error;
@@ -437,6 +459,11 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
       term_months: "",
       step_year: "0",
       plan_name: "",
+      reno_property_id: "",
+      reno_unit_id: "",
+      reno_investment: "",
+      reno_rent_increase: "",
+      reno_value_after: "",
     });
     setRefinancedLoanIds([]);
     setCollateralPropIds([]);
@@ -850,6 +877,106 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Rekonstrukce */}
+          {availableProperties.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <button
+                type="button"
+                onClick={() => setRenoExpanded((v) => !v)}
+                className="font-semibold text-lg flex items-center gap-2 hover:underline"
+              >
+                {renoExpanded ? "▾" : "▸"} Rekonstrukce
+              </button>
+              {renoExpanded && (() => {
+                const selProp = availableProperties.find((p) => p.id === formData.reno_property_id);
+                const propUnits = allUnits.filter((u) => u.property_id === formData.reno_property_id);
+                const selUnit = propUnits.find((u) => u.id === formData.reno_unit_id);
+                const valueBefore = selUnit
+                  ? (selUnit.estimated_value || 0)
+                  : (selProp ? (selProp.estimated_value || selProp.purchase_price || 0) : 0);
+                const inv = parseFloat(formData.reno_investment) || 0;
+                const inc = parseFloat(formData.reno_rent_increase) || 0;
+                const after = parseFloat(formData.reno_value_after) || 0;
+                const roiRent = inv > 0 ? (inc * 12 / inv) * 100 : 0;
+                const roiVal = inv > 0 ? ((after - valueBefore) / inv) * 100 : 0;
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label>Nemovitost</Label>
+                        <select
+                          className="w-full h-9 border rounded-md px-2 text-sm bg-background"
+                          value={formData.reno_property_id}
+                          onChange={(e) => setFormData({ ...formData, reno_property_id: e.target.value, reno_unit_id: "" })}
+                        >
+                          <option value="">— vyber nemovitost —</option>
+                          {availableProperties.map((p) => (
+                            <option key={p.id} value={p.id}>{p.identifier}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Rozsah</Label>
+                        <select
+                          className="w-full h-9 border rounded-md px-2 text-sm bg-background"
+                          value={formData.reno_unit_id}
+                          onChange={(e) => setFormData({ ...formData, reno_unit_id: e.target.value })}
+                          disabled={propUnits.length === 0}
+                        >
+                          <option value="">Celý dům / nemovitost (fasáda…)</option>
+                          {propUnits.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <Label>Plánovaná investice (Kč)</Label>
+                        <FormattedNumberInput
+                          value={formData.reno_investment}
+                          onValueChange={(v) => setFormData({ ...formData, reno_investment: v })}
+                          placeholder="500.000"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Navýšení příjmu (Kč/měs)</Label>
+                        <FormattedNumberInput
+                          value={formData.reno_rent_increase}
+                          onValueChange={(v) => setFormData({ ...formData, reno_rent_increase: v })}
+                          placeholder="3.000"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Hodnota po rekonstrukci (Kč)</Label>
+                        <FormattedNumberInput
+                          value={formData.reno_value_after}
+                          onValueChange={(v) => setFormData({ ...formData, reno_value_after: v })}
+                          placeholder={valueBefore ? formatNumber(valueBefore) : "nový odhad"}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label>ROI z nájmu (%)</Label>
+                        <Input value={`${roiRent.toFixed(1)} %`} disabled className="bg-muted" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Zhodnocení (% z investice)</Label>
+                        <Input value={`${roiVal.toFixed(1)} %`} disabled className="bg-muted" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Navýšení příjmu zvedne měsíční cashflow; investice se odečte
+                      z hotovosti po transakci. ROI z nájmu = roční navýšení /
+                      investice; Zhodnocení = (hodnota po − před) / investice.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
