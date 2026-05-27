@@ -153,7 +153,6 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     available_collateral_value: 0,
     required_collateral: 0,
     collateral_balance: 0, // + = přebytek, − = chybí
-    loan_ltv_ratio: 0, // úvěr / zástavní hodnota (bez %)
     // B3: účelová / max neúčelová část
     purpose_amount: 0,
     max_non_purpose: 0,
@@ -366,9 +365,6 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     const requiredCollateral = ltvDecimal > 0 ? loanAmount / ltvDecimal : 0;
     const collateralBalance = availableCollateralValue - requiredCollateral;
 
-    // Poměr LTV (per CEO): jak velkou část zástavní hodnoty úvěr pokrývá.
-    // = úvěr / zástavní hodnota celkem. Bez % značky (CEO: "procenta neuváděj").
-    const loanLtvRatio = availableCollateralValue > 0 ? loanAmount / availableCollateralValue : 0;
 
     // Cashflow
     const cashflow = monthlyRent - monthlyExpenses;
@@ -555,7 +551,6 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
       available_collateral_value: availableCollateralValue,
       required_collateral: requiredCollateral,
       collateral_balance: collateralBalance,
-      loan_ltv_ratio: loanLtvRatio,
       purpose_amount: purposeAmount,
       max_non_purpose: maxNonPurpose,
       current_cashflow_impact_pre_drawdown: currentCashflowImpactPreDrawdown,
@@ -862,12 +857,6 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
                   }
                   required
                 />
-                {/* Poměr LTV (per CEO: bez % značky) — jen když je co počítat */}
-                {calculations.loan_ltv_ratio > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Poměr LTV: <span className="font-semibold">{calculations.loan_ltv_ratio.toFixed(2)}</span>
-                  </p>
-                )}
               </div>
               <div className="space-y-2">
                 <Label>Úroková sazba (%) *</Label>
