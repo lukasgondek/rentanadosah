@@ -64,6 +64,25 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
+  // Při loadu (nebo když URL přinese client= z refreshe) dotáhnout info klienta.
+  // POZOR: hook musí být PŘED early-return větvemi níže, jinak se mění počet
+  // hooků mezi rendery (React error #310).
+  useEffect(() => {
+    if (!selectedClientId) {
+      setSelectedClientInfo(null);
+      return;
+    }
+    if (selectedClientInfo?.id === selectedClientId) return;
+    supabase
+      .from("profiles")
+      .select("id, email, full_name")
+      .eq("id", selectedClientId)
+      .single()
+      .then(({ data }) => {
+        if (data) setSelectedClientInfo(data);
+      });
+  }, [selectedClientId]);
+
   if (loading || roleLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -96,23 +115,6 @@ const Index = () => {
       setSelectedClientInfo(null);
     }
   };
-
-  // Při loadu (nebo když URL přinese client= z refreshe) dotáhnout info klienta.
-  useEffect(() => {
-    if (!selectedClientId) {
-      setSelectedClientInfo(null);
-      return;
-    }
-    if (selectedClientInfo?.id === selectedClientId) return;
-    supabase
-      .from("profiles")
-      .select("id, email, full_name")
-      .eq("id", selectedClientId)
-      .single()
-      .then(({ data }) => {
-        if (data) setSelectedClientInfo(data);
-      });
-  }, [selectedClientId]);
 
   const renderContent = () => {
     if (activeTab === "admin" && isAdmin) {
