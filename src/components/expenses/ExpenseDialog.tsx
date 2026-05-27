@@ -1,12 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
@@ -20,8 +19,26 @@ interface ExpenseFormData {
   is_recurring: boolean;
 }
 
-export const ExpenseDialog = ({ onSuccess, userId }: { onSuccess: () => void; userId?: string }) => {
-  const [open, setOpen] = useState(false);
+interface ExpenseDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+  userId?: string;
+  /** Pokud existuje, dialog edituje stávající záznam místo přidávání nového. */
+  editData?: {
+    id: string;
+    name: string;
+    amount: number;
+    frequency: string | null;
+    is_recurring: boolean | null;
+  };
+}
+
+/**
+ * Single-mode dialog: přidat NEBO upravit jeden výdaj.
+ * Pro hromadné přidávání nového klienta viz ExpenseWizard.
+ */
+export const ExpenseDialog = ({ open, onOpenChange, onSuccess, userId, editData }: ExpenseDialogProps) => {
   const { toast } = useToast();
   const [formData, setFormData] = useState<ExpenseFormData>({
     name: "",
@@ -29,6 +46,20 @@ export const ExpenseDialog = ({ onSuccess, userId }: { onSuccess: () => void; us
     frequency: "monthly",
     is_recurring: true,
   });
+
+  // Při otevření v edit režimu načti hodnoty existujícího záznamu.
+  useEffect(() => {
+    if (open && editData) {
+      setFormData({
+        name: editData.name || "",
+        amount: editData.amount,
+        frequency: (editData.frequency as Frequency) || "monthly",
+        is_recurring: editData.is_recurring ?? true,
+      });
+    } else if (open && !editData) {
+      setFormData({ name: "", amount: undefined, frequency: "monthly", is_recurring: true });
+    }
+  }, [open, editData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,22 +75,24 @@ export const ExpenseDialog = ({ onSuccess, userId }: { onSuccess: () => void; us
       return;
     }
 
-    const { error } = await supabase.from("expenses").insert({
-      user_id: userId || user.id,
+    const payload = {
       name: formData.name.trim() || "Bez názvu",
       amount: formData.amount,
       frequency: formData.frequency,
       is_recurring: formData.is_recurring,
-    });
+    };
+
+    const { error } = editData
+      ? await supabase.from("expenses").update(payload).eq("id", editData.id)
+      : await supabase.from("expenses").insert({ user_id: userId || user.id, ...payload });
 
     if (error) {
       toast({ title: "Chyba", description: error.message, variant: "destructive" });
       return;
     }
 
-    toast({ title: "Úspěch", description: "Výdaj byl přidán" });
-    setOpen(false);
-    setFormData({ name: "", amount: undefined, frequency: "monthly", is_recurring: true });
+    toast({ title: "Úspěch", description: editData ? "Výdaj byl upraven" : "Výdaj byl přidán" });
+    onOpenChange(false);
     onSuccess();
   };
 
@@ -71,16 +104,10 @@ export const ExpenseDialog = ({ onSuccess, userId }: { onSuccess: () => void; us
       : null;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="mr-2 h-4 w-4" />
-          Přidat výdaj
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Přidat nový výdaj</DialogTitle>
+          <DialogTitle>{editData ? "Upravit výdaj" : "Přidat nový výdaj"}</DialogTitle>
           <DialogDescription>Zadejte pravidelný nebo jednorázový výdaj</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -136,10 +163,10 @@ export const ExpenseDialog = ({ onSuccess, userId }: { onSuccess: () => void; us
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Zrušit
             </Button>
-            <Button type="submit">Přidat</Button>
+            <Button type="submit">{editData ? "Uložit změny" : "Přidat"}</Button>
           </div>
         </form>
       </DialogContent>

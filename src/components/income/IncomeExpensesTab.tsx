@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { IncomeDialog } from "./IncomeDialog";
 import { IncomeTable } from "./IncomeTable";
-import { ExpenseDialog } from "@/components/expenses/ExpenseDialog";
+import { ExpenseWizard } from "@/components/expenses/ExpenseWizard";
 import { ExpenseTable } from "@/components/expenses/ExpenseTable";
 import { formatCurrency } from "@/lib/utils";
 
@@ -327,14 +327,19 @@ const IncomeExpensesTab = ({ userId: viewUserId, isAdmin = false }: { userId?: s
                   <CardTitle>Pravidelné výdaje</CardTitle>
                   <CardDescription>Měsíční a roční náklady</CardDescription>
                 </div>
-                {!readOnly && <ExpenseDialog onSuccess={fetchExpenses} userId={viewUserId || undefined} />}
+                {!readOnly && <ExpenseWizard onSuccess={fetchExpenses} userId={viewUserId || undefined} />}
               </div>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Načítání...</div>
               ) : (
-                <ExpenseTable expenses={expenses} onDelete={fetchExpenses} />
+                <ExpenseTable
+                  expenses={expenses}
+                  onDelete={fetchExpenses}
+                  userId={viewUserId || undefined}
+                  readOnly={readOnly}
+                />
               )}
             </CardContent>
           </Card>
