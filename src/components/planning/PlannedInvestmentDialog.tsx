@@ -270,28 +270,75 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     const interestRate = financeExpanded ? (parseFloat(formData.interest_rate) || 0) : 0;
     const termYears = financeExpanded ? (parseFloat(formData.term_months) || 0) : 0;
 
-    // B1+B2: dostupná zástava + auto placeholder výše úvěru (per CEO 2026-05-27)
-    // Vzorec:
-    //  base   = LTV × KUPNÍ CENA kupované nemovitosti (ne odhad! — banka
-    //           půjčí proti kupní ceně, ne odhadu nahoře)
-    //  + LTV × VOLNÁ zástava každé vybrané stávající nemovitosti (collateralPropIds)
-    //  + IF stávající nemovitost má všechny úvěry v refi → místo volné použij
-    //    CELOU odhadní cenu (refi splatí staré jistiny, banka má celou kapacitu)
+    // B1+B2 — dostupná zástava (per CEO 2026-05-27, revize 2):
     //
-    // Pozor: refi sám o sobě nestačí — nemovitost MUSÍ být vybraná v zástavách.
-    // Refi je jen modifikátor "co se počítá" (volná vs. celá odhad).
+    // Pravidlo: "co je vybrané, to se počítá. Co vybrané není, s tím to nepočítá."
+    // KAŽDÁ z těchto sekcí, když je AKTIVNÍ, přispěje do zástav:
+    //   1. Buy expanded → KUPNÍ CENA (banka půjčí proti kupní ceně, ne odhadu)
+    //   2. Refi vybraný úvěr → AUTOMATICKY nemovitost na které leží (CELÁ odhad,
+    //      refi splatí starou jistinu → klient získá celou kapacitu LTV)
+    //   3. Reno expanded → AUTOMATICKY rekonstruovaná nemovitost (po reno hodnota,
+    //      pokud zadána, jinak aktuální odhad)
+    //   4. Explicit "Zástava — stávající nemovitosti" checkbox → vybraná nemovitost
+    //      (volná, nebo celá pokud všechny její úvěry jsou v refi)
+    //
+    // Deduplikace per propertyId: stejná nemovitost se nezapočítá 2× — vybereme
+    // NEJVYŠŠÍ contribution napříč všemi režimy (refi celá > volná zástava).
     const refinancedLoanIdSet = new Set(refinancedLoanIds);
-    const buyCollateralBasis = buyExpanded ? purchasePrice : 0;
-    const collateralFromExisting = collateralPropIds.reduce((sum, pid) => {
+    const contributionByProp = new Map<string, number>();
+    const addProp = (pid: string, val: number) => {
+      contributionByProp.set(pid, Math.max(contributionByProp.get(pid) ?? 0, val));
+    };
+    const allLoansOnPropRefi = (p: any) => {
+      const loans = p.boundLoans || [];
+      return loans.length > 0 && loans.every((l: any) => refinancedLoanIdSet.has(l.id));
+    };
+
+    // (4) Explicitně vybrané zástavy
+    for (const pid of collateralPropIds) {
       const p = availableProperties.find((x) => x.id === pid);
-      if (!p) return sum;
+      if (!p) continue;
       const loansOnProp = p.boundLoans || [];
-      // Bez úvěrů → klient vlastní 100 %, celá odhad je k dispozici.
-      if (loansOnProp.length === 0) return sum + projValue(p);
-      // Všechny úvěry refi → celá odhad (staré jistiny se splatí).
-      const allRefi = loansOnProp.every((l: any) => refinancedLoanIdSet.has(l.id));
-      return sum + (allRefi ? projValue(p) : projFreeCollateral(p));
-    }, 0);
+      const val = loansOnProp.length === 0
+        ? projValue(p) // bez úvěrů → 100 %
+        : allLoansOnPropRefi(p) ? projValue(p) : projFreeCollateral(p);
+      addProp(pid, val);
+    }
+
+    // (2) Refi: nemovitost(i) na kterých leží refinancovaný úvěr → CELÁ odhad
+    for (const p of availableProperties) {
+      const hasRefiLoan = (p.boundLoans || []).some((l: any) => refinancedLoanIdSet.has(l.id));
+      if (hasRefiLoan) addProp(p.id, projValue(p));
+    }
+
+    // (3) Rekonstrukce: rekonstruovaná nemovitost (zástava nového úvěru)
+    if (renoExpanded && formData.reno_property_id) {
+      const p = availableProperties.find((x) => x.id === formData.reno_property_id);
+      if (p) {
+        const valueAfter = parseFloat(formData.reno_value_after) || 0;
+        // Po reko hodnota: bereme vyšší z (aktuální odhad, hodnota po reko).
+        const basis = Math.max(projValue(p), valueAfter);
+        const loansOnProp = p.boundLoans || [];
+        let val: number;
+        if (loansOnProp.length === 0) {
+          val = basis;
+        } else if (allLoansOnPropRefi(p)) {
+          val = basis;
+        } else {
+          // Volná zástava = basis − stávající jistiny / jejich LTV
+          const usedByOldLoans = loansOnProp.reduce((s: number, l: any) => {
+            const ltv = ((l.ltv_percent ?? 80) as number) / 100;
+            return s + (ltv > 0 ? projRemaining(l) / ltv : projRemaining(l));
+          }, 0);
+          val = Math.max(0, basis - usedByOldLoans);
+        }
+        addProp(p.id, val);
+      }
+    }
+
+    // (1) Buy = samostatná entity ("nová nemovitost", ne v contributionByProp).
+    const buyCollateralBasis = buyExpanded ? purchasePrice : 0;
+    const collateralFromExisting = Array.from(contributionByProp.values()).reduce((s, v) => s + v, 0);
     const availableCollateralValue = buyCollateralBasis + collateralFromExisting;
 
     const loanAmountPlaceholder = availableCollateralValue * ltvDecimal;
