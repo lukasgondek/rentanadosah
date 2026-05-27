@@ -54,6 +54,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
   });
 
   const [currentDashboardCashflow, setCurrentDashboardCashflow] = useState(0);
+  // Aktuální dostupná hotovost klienta (z income_sources liquid_assets) — pro
+  // výpočet 3% rezervy. Pokud není zadáno, počítáme jen z load_amount − purchase
+  // přebytku.
+  const [currentLiquidAssets, setCurrentLiquidAssets] = useState(0);
   // Refinancování: vybrané úvěry "zmizí" → jejich splátka se vrátí do cashflow
   const [availableLoans, setAvailableLoans] = useState<any[]>([]);
   const [refinancedLoanIds, setRefinancedLoanIds] = useState<string[]>([]);
@@ -143,14 +147,28 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     cashflow_after_transaction: 0,
     cash_remaining: 0,
     cash_after_transaction: 0,
+    // B1+B2: LTV / požadovaná zástava / placeholder výše úvěru
+    loan_amount_placeholder: 0,
+    available_collateral_value: 0,
+    required_collateral: 0,
+    collateral_balance: 0, // + = přebytek, − = chybí
+    // B3: účelová / max neúčelová část
+    purpose_amount: 0,
+    max_non_purpose: 0,
+    // B4: cashflow PŘED dočerpáním (jen úroková část anuity)
+    current_cashflow_impact_pre_drawdown: 0,
+    cashflow_after_pre_drawdown: 0,
+    // B5: kolik měsíců pokryje 3 % rezerva
+    coverage_months: 0,
   });
 
   useEffect(() => {
     if (editData) {
       setOpen(true);
-      // Načti uložený refinanc/prodej výběr (jsonb sloupce)
+      // Načti uložený refinanc/prodej/zástava výběr (jsonb sloupce)
       if (Array.isArray(editData.refinanced_loan_ids)) setRefinancedLoanIds(editData.refinanced_loan_ids);
       if (Array.isArray(editData.sold_property_ids)) setSoldPropertyIds(editData.sold_property_ids);
+      if (Array.isArray(editData.collateral_property_ids)) setCollateralPropIds(editData.collateral_property_ids);
       if (editData.sold_loan_actions && typeof editData.sold_loan_actions === "object") {
         setLoanActionByProp(editData.sold_loan_actions);
       }
@@ -169,15 +187,26 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
       if (!user) return;
       const targetId = userId || user.id;
 
-      // Parallel fetch income, expenses, loans, properties, vazby
-      const [incomeRes, expensesRes, loansRes, propsRes, lcRes, unitsRes] = await Promise.all([
+      // Parallel fetch income, expenses, loans, properties, vazby, investice (likvidni rezerva)
+      const [incomeRes, expensesRes, loansRes, propsRes, lcRes, unitsRes, invRes] = await Promise.all([
         supabase.from("income_sources").select("type, category, expense_type, income_amount, monthly_amount, real_net_monthly").eq("user_id", targetId),
         supabase.from("expenses").select("amount").eq("user_id", targetId),
         supabase.from("loans").select("id, name, monthly_payment, remaining_principal, interest_rate, ltv_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("properties").select("id, identifier, estimated_value, purchase_price, monthly_rent, monthly_expenses, loan_id, yearly_appreciation_percent").eq("user_id", targetId).eq("is_forecast", false),
         supabase.from("loan_collaterals").select("property_id, loan_id"),
         supabase.from("property_units").select("id, property_id, name, monthly_rent, estimated_value, is_cadastrally_separated"),
+        // Hotovostni rezerva (sporici ucet, akcie, fondy) — pro vypocet
+        // "pokryje X mesicu @ 3 % sporak". Pouzivame liquidity_months <= 6
+        // jako proxy "rychle k dispozici" (sporak, bezne, akcie/ETF).
+        supabase.from("investments").select("amount, liquidity_months").eq("user_id", targetId).eq("is_forecast", false),
       ]);
+
+      // Hotovostni rezerva = soucet aktiv s likviditou ≤ 6 mesicu.
+      const liquidSum = (invRes.data || []).reduce((s: number, i: any) => {
+        const lm = i.liquidity_months ?? 0;
+        return lm <= 6 ? s + (i.amount || 0) : s;
+      }, 0);
+      setCurrentLiquidAssets(liquidSum);
 
       // REÁLNÝ základ cashflow (stejná logika jako Dashboard/Příjmy):
       // příjmy KROMĚ účetního "rental" (nahrazuje reálný nájem z nemovitostí),
@@ -235,9 +264,46 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     const estimatedValue = buyExpanded ? (parseFloat(formData.estimated_value) || 0) : 0;
     const appreciationPercent = buyExpanded ? (parseFloat(formData.appreciation_percent) || 5) : 0;
     const rentGrowthPercent = buyExpanded ? (parseFloat(formData.rent_growth_percent) || 5) : 0;
-    const loanAmount = financeExpanded ? (parseFloat(formData.loan_amount) || 0) : 0;
+    const ltvPercent = (parseFloat(formData.ltv_percent) || 80);
+    const ltvDecimal = ltvPercent / 100;
     const interestRate = financeExpanded ? (parseFloat(formData.interest_rate) || 0) : 0;
     const termYears = financeExpanded ? (parseFloat(formData.term_months) || 0) : 0;
+
+    // B1+B2: dostupná zástava + auto placeholder výše úvěru
+    // Logika: kupovaná nemovitost (celá odhad) + vybrané stávající zástavy.
+    // Pro stávající: pokud je v refinancedLoanIds (refi splatí starou jistinu)
+    // → bere se CELÁ odhadní cena; jinak jen VOLNÁ zástava (po starých úvěrech).
+    const refinancedLoanIdSet = new Set(refinancedLoanIds);
+    const availableCollateralValue =
+      (buyExpanded ? estimatedValue : 0) +
+      collateralPropIds.reduce((sum, pid) => {
+        const p = availableProperties.find((x) => x.id === pid);
+        if (!p) return sum;
+        const isRefiingAnyLoanOnIt = (p.boundLoans || []).some((l: any) =>
+          refinancedLoanIdSet.has(l.id)
+        );
+        // Pokud nemovitost má vázané úvěry a všechny jsou refinancované →
+        // celá odhad. Pokud má úvěry ale jen některé refi → bezpečně zástava
+        // jen volnou částí (zbylé úvěry banka pořád vidí).
+        if (isRefiingAnyLoanOnIt) {
+          const allRefi = (p.boundLoans || []).every((l: any) => refinancedLoanIdSet.has(l.id));
+          return sum + (allRefi ? projValue(p) : projFreeCollateral(p));
+        }
+        return sum + projFreeCollateral(p);
+      }, 0);
+
+    const loanAmountPlaceholder = availableCollateralValue * ltvDecimal;
+    // Pokud klient nezadal výši úvěru, používáme navrženou (= max do LTV).
+    const loanAmountInput = parseFloat(formData.loan_amount);
+    const loanAmount = financeExpanded
+      ? (isNaN(loanAmountInput) || loanAmountInput === 0
+          ? loanAmountPlaceholder
+          : loanAmountInput)
+      : 0;
+
+    // B1: požadovaná zástava pro daný úvěr
+    const requiredCollateral = ltvDecimal > 0 ? loanAmount / ltvDecimal : 0;
+    const collateralBalance = availableCollateralValue - requiredCollateral;
 
     // Cashflow
     const cashflow = monthlyRent - monthlyExpenses;
@@ -322,6 +388,16 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     const refinancedPayoff = availableLoans
       .filter((l) => refinancedLoanIds.includes(l.id))
       .reduce((sum, l) => sum + projRemaining(l), 0);
+    // Refinancované úvěry také přestávají platit úroky → cashflow před
+    // dočerpáním (kdy se z nového úvěru platí jen úrok) se o ně očišťuje.
+    const refinancedInterestSaved = availableLoans
+      .filter((l) => refinancedLoanIds.includes(l.id))
+      .reduce((sum, l) => {
+        // Měsíční úrok refinancovaného úvěru ke dni odstupu (klesá s jistinou).
+        const remaining = projRemaining(l);
+        const rate = (l.interest_rate || 0) / 100 / 12;
+        return sum + remaining * rate;
+      }, 0);
 
     // Prodej nemovitostí: ubyde čistý nájem (rent − expenses) z cashflow;
     // při "splatit úvěr" se navíc uvolní splátka (cashflow) a z prodeje se
@@ -359,6 +435,42 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     // Cash remaining (jen kladné — informativní hláška): úvěr > kupní cena
     const cashRemaining = loanAmount > purchasePrice ? loanAmount - purchasePrice : 0;
 
+    // B3: účelová část úvěru = kupní cena + zbylá jistina refi + plánovaná
+    // investice (rekonstrukce). Banka tuto sumu pokrývá doložením účelu.
+    const purposeAmount =
+      (buyExpanded ? purchasePrice : 0) +
+      refinancedPayoff +
+      renoInvest;
+    // Maximální neúčelová část = fixních 30 % z účelové (per CEO 2026-05-27).
+    const maxNonPurpose = purposeAmount * 0.3;
+
+    // B4: cashflow PŘED dočerpáním (typicky při rekonstrukci nebo postupném
+    // čerpání). Klient platí JEN úrokovou část anuity, nikoli plnou splátku.
+    // Vzorec: úvěr × sazba / 12 (zjednodušení per CEO 2026-05-27, klient
+    // nezná čerpací plán). Refinancovaný úvěr už nelze počítat — uloží se ten
+    // úrok zpět do cashflow stejně jako v plné fázi.
+    const currentCashflowImpactPreDrawdown =
+      (cashflow - monthlyInterest) + refinancedPayments + soldCashflowDelta + renoRentInc;
+    const cashflowAfterPreDrawdown = currentDashboardCashflow + currentCashflowImpactPreDrawdown;
+
+    // B5: kolik měsíců pokryje hotovost po transakci + likvidní rezerva
+    // negativní cashflow dopad. Simulace měsíc po měsíci s 3 % p.a. (compound).
+    // 0 = žádné krytí, Infinity → ukážeme "neomezeně" (cashflow je kladný).
+    const totalCashRezerva = Math.max(0, cashAfterTransaction) + currentLiquidAssets;
+    const monthlyDrain = Math.max(0, -currentCashflowImpact);
+    let coverageMonths = 0;
+    if (monthlyDrain <= 0) {
+      coverageMonths = Infinity;
+    } else if (totalCashRezerva > 0) {
+      let balance = totalCashRezerva;
+      const monthlyInterestRate = 0.03 / 12;
+      // Limit 600 měsíců (50 let) — víc nemá smysl reportovat.
+      while (balance > 0 && coverageMonths < 600) {
+        balance = balance * (1 + monthlyInterestRate) - monthlyDrain;
+        coverageMonths++;
+      }
+    }
+
     setCalculations({
       cashflow,
       monthly_payment: monthlyPayment,
@@ -374,8 +486,17 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
       cashflow_after_transaction: cashflowAfterTransaction,
       cash_remaining: cashRemaining,
       cash_after_transaction: cashAfterTransaction,
+      loan_amount_placeholder: loanAmountPlaceholder,
+      available_collateral_value: availableCollateralValue,
+      required_collateral: requiredCollateral,
+      collateral_balance: collateralBalance,
+      purpose_amount: purposeAmount,
+      max_non_purpose: maxNonPurpose,
+      current_cashflow_impact_pre_drawdown: currentCashflowImpactPreDrawdown,
+      cashflow_after_pre_drawdown: cashflowAfterPreDrawdown,
+      coverage_months: coverageMonths,
     });
-  }, [formData, currentDashboardCashflow, availableLoans, refinancedLoanIds, availableProperties, soldPropertyIds, loanActionByProp, buyExpanded, financeExpanded, renoExpanded]);
+  }, [formData, currentDashboardCashflow, currentLiquidAssets, availableLoans, refinancedLoanIds, availableProperties, collateralPropIds, soldPropertyIds, loanActionByProp, buyExpanded, financeExpanded, renoExpanded]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -450,6 +571,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
       refinanced_loan_ids: refinancedLoanIds,
       sold_property_ids: soldPropertyIds,
       sold_loan_actions: loanActionByProp,
+      collateral_property_ids: collateralPropIds,
     };
 
     let error;
@@ -497,6 +619,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     setRefinancedLoanIds([]);
     setCollateralPropIds([]);
     setSoldPropertyIds([]);
+    setBuyExpanded(false);
+    setFinanceExpanded(false);
+    setRefiExpanded(false);
+    setRenoExpanded(false);
     setLoanActionByProp({});
     setMoveTargetByProp({});
     setSellExpanded(false);
@@ -663,9 +789,30 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
                 <FormattedNumberInput
                   value={formData.loan_amount}
                   onValueChange={(v) => setFormData({ ...formData, loan_amount: v })}
-                  placeholder="4.000.000"
+                  placeholder={
+                    calculations.loan_amount_placeholder > 0
+                      ? formatNumber(Math.round(calculations.loan_amount_placeholder))
+                      : "4.000.000"
+                  }
                   required
                 />
+                {calculations.loan_amount_placeholder > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Maximum z LTV {formData.ltv_percent || "80"} %:{" "}
+                    <button
+                      type="button"
+                      className="text-blue-600 hover:underline"
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          loan_amount: Math.round(calculations.loan_amount_placeholder).toString(),
+                        })
+                      }
+                    >
+                      {formatNumber(Math.round(calculations.loan_amount_placeholder))} Kč
+                    </button>
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Úroková sazba (%) *</Label>
@@ -690,6 +837,19 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
                   onChange={(e) => setFormData({ ...formData, ltv_percent: e.target.value })}
                   placeholder="80"
                 />
+                {/* B1: požadovaná výše zástavy + balance */}
+                {(parseFloat(formData.loan_amount) > 0 || calculations.loan_amount_placeholder > 0) && (
+                  <div className="text-xs space-y-0.5 pt-1">
+                    <p className="text-muted-foreground">
+                      Požadovaná zástava: {formatNumber(Math.round(calculations.required_collateral))} Kč
+                    </p>
+                    <p className={calculations.collateral_balance >= 0 ? "text-green-700" : "text-red-600 font-semibold"}>
+                      {calculations.collateral_balance >= 0
+                        ? `+${formatNumber(Math.round(calculations.collateral_balance))} Kč přebytek zástav`
+                        : `${formatNumber(Math.round(calculations.collateral_balance))} Kč chybí (doplatek hotovostí)`}
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Doba splatnosti (roky) *</Label>
@@ -702,6 +862,34 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
                 />
               </div>
             </div>
+
+            {/* B3: účelová / max neúčelová část úvěru */}
+            {calculations.purpose_amount > 0 && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Účelová část (Kč)</Label>
+                  <Input
+                    value={formatNumber(Math.round(calculations.purpose_amount))}
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Kupní cena + zbylá jistina refi + plánovaná rekonstrukce.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Maximální neúčelová část (Kč)</Label>
+                  <Input
+                    value={formatNumber(Math.round(calculations.max_non_purpose))}
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    30 % z účelové části (banka neúčelovku nad to neprofinancuje).
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1089,6 +1277,26 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
                   className={`font-semibold ${calculations.cashflow_after_transaction < 0 ? "bg-red-50 text-red-600" : "bg-background"}`}
                 />
               </div>
+              {/* B4: dopad PŘED dočerpáním (jen úroková část anuity) */}
+              <div className="space-y-2">
+                <Label>Dopad na cashflow před dočerpáním (Kč)</Label>
+                <Input
+                  value={`${calculations.current_cashflow_impact_pre_drawdown >= 0 ? "+" : ""}${formatNumber(calculations.current_cashflow_impact_pre_drawdown)}`}
+                  disabled
+                  className={`font-semibold ${calculations.current_cashflow_impact_pre_drawdown < 0 ? "bg-red-50 text-red-600" : "bg-background"}`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Při postupném čerpání (rekonstrukce) klient platí jen úrok, ne plnou splátku.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Měsíční cashflow před dočerpáním (Kč)</Label>
+                <Input
+                  value={formatNumber(calculations.cashflow_after_pre_drawdown)}
+                  disabled
+                  className={`font-semibold ${calculations.cashflow_after_pre_drawdown < 0 ? "bg-red-50 text-red-600" : "bg-background"}`}
+                />
+              </div>
               <div className="space-y-2">
                 <Label>Hotovost po transakci (Kč)</Label>
                 <Input
@@ -1099,6 +1307,27 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
                 <p className="text-xs text-muted-foreground">
                   Načerpání nad kupní cenu a výtěžky z prodeje (−) splacené úvěry.
                   Záporné = doplatek z hotovosti.
+                </p>
+              </div>
+              {/* B5: kolik měsíců pokryje hotovost + likvidní rezerva při 3 % p.a. */}
+              <div className="space-y-2">
+                <Label>Při 3 % úroku pokryje splátek</Label>
+                <Input
+                  value={
+                    calculations.coverage_months === Infinity
+                      ? "neomezeně (cashflow je kladný)"
+                      : calculations.coverage_months >= 600
+                        ? "50+ let"
+                        : calculations.coverage_months > 0
+                          ? `${calculations.coverage_months} měsíců (≈ ${(calculations.coverage_months / 12).toFixed(1)} let)`
+                          : "—"
+                  }
+                  disabled
+                  className="bg-background font-semibold"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hotovost po transakci + likvidní rezerva ({formatNumber(currentLiquidAssets)} Kč),
+                  úročená 3 % p.a., dotuje záporné cashflow.
                 </p>
               </div>
             </div>
