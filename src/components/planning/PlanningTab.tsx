@@ -368,10 +368,12 @@ export default function PlanningTab({ userId: viewUserId, isAdmin = false }: { u
       {editingInvestment && (
         <PlannedInvestmentDialog
           editData={editingInvestment}
+          userId={viewUserId || undefined}
           onSuccess={() => {
             setEditingInvestment(null);
             fetchInvestments();
           }}
+          onClose={() => setEditingInvestment(null)}
         />
       )}
 

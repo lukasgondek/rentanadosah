@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
 import Layout from "@/components/Layout";
@@ -26,8 +26,16 @@ const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  // activeTab + selectedClientId v URL → přežijí refresh a dají se sdílet linkem.
+  // ?tab=planning&client=<uuid>
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "dashboard";
+  const selectedClientId = searchParams.get("client");
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
   const [selectedClientInfo, setSelectedClientInfo] = useState<ClientInfo | null>(null);
   const { isAdmin, isProspect, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
@@ -69,9 +77,15 @@ const Index = () => {
   }
 
   const handleSelectClient = async (clientId: string | null) => {
-    setSelectedClientId(clientId);
+    const next = new URLSearchParams(searchParams);
     if (clientId) {
-      setActiveTab("dashboard");
+      next.set("client", clientId);
+      next.set("tab", "dashboard");
+    } else {
+      next.delete("client");
+    }
+    setSearchParams(next, { replace: true });
+    if (clientId) {
       const { data } = await supabase
         .from("profiles")
         .select("id, email, full_name")
@@ -82,6 +96,23 @@ const Index = () => {
       setSelectedClientInfo(null);
     }
   };
+
+  // Při loadu (nebo když URL přinese client= z refreshe) dotáhnout info klienta.
+  useEffect(() => {
+    if (!selectedClientId) {
+      setSelectedClientInfo(null);
+      return;
+    }
+    if (selectedClientInfo?.id === selectedClientId) return;
+    supabase
+      .from("profiles")
+      .select("id, email, full_name")
+      .eq("id", selectedClientId)
+      .single()
+      .then(({ data }) => {
+        if (data) setSelectedClientInfo(data);
+      });
+  }, [selectedClientId]);
 
   const renderContent = () => {
     if (activeTab === "admin" && isAdmin) {

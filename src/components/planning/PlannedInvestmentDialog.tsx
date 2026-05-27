@@ -21,9 +21,12 @@ interface PlannedInvestmentDialogProps {
   onSuccess: () => void;
   editData?: any;
   userId?: string;
+  /** Volá se kdykoli se dialog zavře (Zrušit, ESC, klik mimo) — parent
+   *  musí vynulovat editData, jinak druhý klik na "Upravit" nezabere. */
+  onClose?: () => void;
 }
 
-export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: PlannedInvestmentDialogProps) => {
+export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }: PlannedInvestmentDialogProps) => {
   const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
 
@@ -504,7 +507,13 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
   const formatNumber = fmtNum;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o && editData) onClose?.();
+      }}
+    >
       {!editData && (
         <DialogTrigger asChild>
           <Button size="sm">
@@ -1122,7 +1131,14 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId }: Planned
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                if (editData) onClose?.();
+              }}
+            >
               Zrušit
             </Button>
             <Button type="submit">
