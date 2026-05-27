@@ -1,10 +1,8 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -14,35 +12,42 @@ type Frequency = "monthly" | "yearly";
 
 /**
  * Typické osobní výdaje českého investora.
- * Placeholder = orientační průměr v MĚSÍČNÍ částce (přepočítá se na roční × 12).
- * Reálná hodnota se ukládá v té frekvenci, jakou má wizard zvolenou.
+ * `placeholder` = orientační průměr v jednotce dané `defaultFreq`.
+ * (Dovolená = roční placeholder 50k, nájem = měsíční 15k atd.)
  */
-const PRESET_EXPENSES: { name: string; monthlyPlaceholder: number }[] = [
-  { name: "Nájem / hypotéka (bydlení)", monthlyPlaceholder: 15000 },
-  { name: "Energie a poplatky (SVJ, voda, plyn, elektřina)", monthlyPlaceholder: 5000 },
-  { name: "Potraviny", monthlyPlaceholder: 10000 },
-  { name: "Doprava (PHM, MHD, leasing)", monthlyPlaceholder: 5000 },
-  { name: "Pojištění (auto, zdraví, životko, domácnost)", monthlyPlaceholder: 3000 },
-  { name: "Telefon, internet, předplatná", monthlyPlaceholder: 2000 },
-  { name: "Dovolené, koníčky, restaurace", monthlyPlaceholder: 5000 },
-  { name: "Děti, vzdělání, sport", monthlyPlaceholder: 4000 },
-  { name: "Zdraví, lékaři, lékárna", monthlyPlaceholder: 1500 },
-  { name: "Oblečení, drogerie, domácnost", monthlyPlaceholder: 2000 },
+const PRESET_EXPENSES: { name: string; placeholder: number; defaultFreq: Frequency }[] = [
+  { name: "Nájem / hypotéka (bydlení)", placeholder: 15000, defaultFreq: "monthly" },
+  { name: "Energie a poplatky (SVJ, voda, plyn, elektřina)", placeholder: 5000, defaultFreq: "monthly" },
+  { name: "Potraviny", placeholder: 10000, defaultFreq: "monthly" },
+  { name: "Doprava (PHM, MHD, leasing)", placeholder: 5000, defaultFreq: "monthly" },
+  { name: "Pojištění (auto, zdraví, životko, domácnost)", placeholder: 30000, defaultFreq: "yearly" },
+  { name: "Telefon, internet, předplatná", placeholder: 2000, defaultFreq: "monthly" },
+  { name: "Dovolené, koníčky, restaurace", placeholder: 60000, defaultFreq: "yearly" },
+  { name: "Děti, vzdělání, sport", placeholder: 4000, defaultFreq: "monthly" },
+  { name: "Zdraví, lékaři, lékárna", placeholder: 1500, defaultFreq: "monthly" },
+  { name: "Oblečení, drogerie, domácnost", placeholder: 2000, defaultFreq: "monthly" },
 ];
 
-const UNPLANNED_PLACEHOLDER = 3000;
+const UNPLANNED_PRESET = { name: "Průměr neplánovaných výdajů", placeholder: 3000, defaultFreq: "monthly" as Frequency };
 
 interface Row {
   name: string;
   value: string; // input as string for FormattedNumberInput
-  placeholder: number; // měsíční placeholder
+  placeholder: number; // v jednotce 'freq' (per-row)
+  freq: Frequency; // měsíčně / ročně PER ŘÁDEK
   /** true = z PRESET_EXPENSES, false = ručně přidaný klientem */
   preset: boolean;
 }
 
 const buildInitialRows = (): Row[] => [
-  ...PRESET_EXPENSES.map((p) => ({ name: p.name, value: "", placeholder: p.monthlyPlaceholder, preset: true })),
-  { name: "Průměr neplánovaných výdajů", value: "", placeholder: UNPLANNED_PLACEHOLDER, preset: true },
+  ...PRESET_EXPENSES.map((p) => ({
+    name: p.name,
+    value: "",
+    placeholder: p.placeholder,
+    freq: p.defaultFreq,
+    preset: true,
+  })),
+  { name: UNPLANNED_PRESET.name, value: "", placeholder: UNPLANNED_PRESET.placeholder, freq: UNPLANNED_PRESET.defaultFreq, preset: true },
 ];
 
 interface ExpenseWizardProps {
@@ -52,45 +57,47 @@ interface ExpenseWizardProps {
 
 export const ExpenseWizard = ({ onSuccess, userId }: ExpenseWizardProps) => {
   const [open, setOpen] = useState(false);
-  const [frequency, setFrequency] = useState<Frequency>("monthly");
   const [rows, setRows] = useState<Row[]>(buildInitialRows());
   // Rychlý mód: klient vyplní jen jednu souhrnnou částku místo položek.
+  // Frekvence souhrnu: kterou z polí klient naposledy editoval.
   const [summaryOverride, setSummaryOverride] = useState<string>("");
+  const [summaryOverrideFreq, setSummaryOverrideFreq] = useState<Frequency>("monthly");
   const { toast } = useToast();
 
-  const toMonthly = (val: number) => (frequency === "yearly" ? val / 12 : val);
-  const toYearly = (val: number) => (frequency === "yearly" ? val : val * 12);
-
-  // Součet vyplněných položek (v rámci aktuální frekvence) — slouží jako
-  // placeholder do souhrnných polí dole.
-  const itemsSumInFreq = useMemo(
+  // Součet vyplněných položek v MĚSÍČNÍ jednotce (každý řádek se přepočítá
+  // podle své vlastní frekvence).
+  const itemsMonthlySum = useMemo(
     () =>
       rows.reduce((s, r) => {
         const v = parseFloat(r.value);
-        return s + (isNaN(v) ? 0 : v);
+        if (isNaN(v) || v <= 0) return s;
+        return s + (r.freq === "yearly" ? v / 12 : v);
       }, 0),
     [rows]
   );
-  const itemsMonthlySum = frequency === "yearly" ? itemsSumInFreq / 12 : itemsSumInFreq;
-  const itemsYearlySum = frequency === "yearly" ? itemsSumInFreq : itemsSumInFreq * 12;
+  const itemsYearlySum = itemsMonthlySum * 12;
 
   const overrideNum = summaryOverride ? parseFloat(summaryOverride) : NaN;
   const hasOverride = !isNaN(overrideNum) && overrideNum > 0;
   const summaryMonthly = hasOverride
-    ? frequency === "yearly" ? overrideNum / 12 : overrideNum
+    ? summaryOverrideFreq === "yearly" ? overrideNum / 12 : overrideNum
     : itemsMonthlySum;
   const summaryYearly = hasOverride
-    ? frequency === "yearly" ? overrideNum : overrideNum * 12
+    ? summaryOverrideFreq === "yearly" ? overrideNum : overrideNum * 12
     : itemsYearlySum;
 
   const updateRow = (idx: number, value: string) => {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, value } : r)));
-    // Kdyz klient zacne vyplňovat položky, override nedává smysl → vyčistíme.
+    // Když klient začne vyplňovat položky, override nedává smysl → vyčistíme.
     if (value) setSummaryOverride("");
   };
 
+  const updateRowFreq = (idx: number, freq: Frequency) => {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, freq } : r)));
+  };
+
   const addCustomRow = () => {
-    setRows((prev) => [...prev, { name: "", value: "", placeholder: 0, preset: false }]);
+    setRows((prev) => [...prev, { name: "", value: "", placeholder: 0, freq: "monthly", preset: false }]);
   };
 
   const removeRow = (idx: number) => {
@@ -129,9 +136,9 @@ export const ExpenseWizard = ({ onSuccess, userId }: ExpenseWizardProps) => {
     if (hasOverride && filledRows.length === 0) {
       const { error } = await supabase.from("expenses").insert({
         user_id: targetUserId,
-        name: frequency === "yearly" ? "Souhrn ročních výdajů" : "Souhrn měsíčních výdajů",
+        name: summaryOverrideFreq === "yearly" ? "Souhrn ročních výdajů" : "Souhrn měsíčních výdajů",
         amount: overrideNum,
-        frequency,
+        frequency: summaryOverrideFreq,
         is_recurring: true,
       });
       if (error) {
@@ -140,12 +147,13 @@ export const ExpenseWizard = ({ onSuccess, userId }: ExpenseWizardProps) => {
       }
       toast({ title: "Hotovo", description: "Souhrnný výdaj byl uložen" });
     } else {
-      // Detailní mód: zapsat všechny vyplněné řádky najednou
+      // Detailní mód: zapsat všechny vyplněné řádky najednou — KAŽDÝ se svou
+      // vlastní frekvencí (dovolená yearly, nájem monthly atd.).
       const records = filledRows.map((r) => ({
         user_id: targetUserId,
         name: r.name.trim(),
         amount: parseFloat(r.value),
-        frequency,
+        frequency: r.freq,
         is_recurring: true,
       }));
       const { error } = await supabase.from("expenses").insert(records);
@@ -180,64 +188,57 @@ export const ExpenseWizard = ({ onSuccess, userId }: ExpenseWizardProps) => {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Toggle MES / ROK */}
-          <div className="space-y-2 rounded-md border p-3 bg-muted/30">
-            <Label>V jaké frekvenci zadáváš čísla?</Label>
-            <RadioGroup
-              value={frequency}
-              onValueChange={(v) => setFrequency(v as Frequency)}
-              className="flex gap-6"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="monthly" id="wiz-monthly" />
-                <Label htmlFor="wiz-monthly">Měsíčně</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="yearly" id="wiz-yearly" />
-                <Label htmlFor="wiz-yearly">Ročně</Label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          {/* Seznam položek */}
+          {/* Seznam položek — každá s vlastním MES/ROK přepínačem */}
           <div className="space-y-2">
-            {rows.map((row, idx) => {
-              const placeholderInFreq = frequency === "yearly" ? row.placeholder * 12 : row.placeholder;
-              return (
-                <div key={idx} className="grid grid-cols-[1fr,140px,40px] gap-2 items-center">
-                  {row.preset ? (
-                    <span className="text-sm">{row.name}</span>
-                  ) : (
-                    <Input
-                      value={row.name}
-                      onChange={(e) => renameRow(idx, e.target.value)}
-                      placeholder="Název výdaje"
-                      className="h-9 text-sm"
-                    />
-                  )}
-                  <FormattedNumberInput
-                    value={row.value}
-                    onValueChange={(v) => updateRow(idx, v)}
-                    placeholder={row.placeholder ? formatNumberPlain(placeholderInFreq) : "0"}
-                    className="h-9 text-sm"
+            <div className="grid grid-cols-[1fr,140px,90px,40px] gap-2 items-center pb-1 border-b text-xs text-muted-foreground">
+              <span>Položka</span>
+              <span className="text-right">Částka (Kč)</span>
+              <span>Frekvence</span>
+              <span />
+            </div>
+            {rows.map((row, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr,140px,90px,40px] gap-2 items-center">
+                {row.preset ? (
+                  <span className="text-sm">{row.name}</span>
+                ) : (
+                  <input
+                    value={row.name}
+                    onChange={(e) => renameRow(idx, e.target.value)}
+                    placeholder="Název výdaje"
+                    className="h-9 text-sm border rounded-md px-3 bg-background"
                   />
-                  {row.preset ? (
-                    <span />
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeRow(idx)}
-                      className="h-9 w-9 text-destructive hover:text-destructive"
-                      title="Smazat řádek"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
+                )}
+                <FormattedNumberInput
+                  value={row.value}
+                  onValueChange={(v) => updateRow(idx, v)}
+                  placeholder={row.placeholder ? formatNumberPlain(row.placeholder) : "0"}
+                  className="h-9 text-sm"
+                />
+                <select
+                  value={row.freq}
+                  onChange={(e) => updateRowFreq(idx, e.target.value as Frequency)}
+                  className="h-9 text-sm border rounded-md px-2 bg-background"
+                  title="Frekvence této položky"
+                >
+                  <option value="monthly">měs.</option>
+                  <option value="yearly">ročně</option>
+                </select>
+                {row.preset ? (
+                  <span />
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeRow(idx)}
+                    className="h-9 w-9 text-destructive hover:text-destructive"
+                    title="Smazat řádek"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ))}
 
             <Button type="button" variant="outline" size="sm" onClick={addCustomRow} className="mt-2">
               <Plus className="mr-1 h-3.5 w-3.5" />
@@ -257,14 +258,14 @@ export const ExpenseWizard = ({ onSuccess, userId }: ExpenseWizardProps) => {
                 <Label className="text-sm font-semibold">Měsíční výdaje celkem (Kč)</Label>
                 <FormattedNumberInput
                   value={
-                    hasOverride && frequency === "monthly"
+                    hasOverride && summaryOverrideFreq === "monthly"
                       ? summaryOverride
                       : summaryMonthly > 0
                         ? Math.round(summaryMonthly).toString()
                         : ""
                   }
                   onValueChange={(v) => {
-                    setFrequency("monthly");
+                    setSummaryOverrideFreq("monthly");
                     setSummaryOverride(v);
                   }}
                   placeholder={formatNumberPlain(summaryMonthly || 30000)}
@@ -275,14 +276,14 @@ export const ExpenseWizard = ({ onSuccess, userId }: ExpenseWizardProps) => {
                 <Label className="text-sm font-semibold">Roční výdaje celkem (Kč)</Label>
                 <FormattedNumberInput
                   value={
-                    hasOverride && frequency === "yearly"
+                    hasOverride && summaryOverrideFreq === "yearly"
                       ? summaryOverride
                       : summaryYearly > 0
                         ? Math.round(summaryYearly).toString()
                         : ""
                   }
                   onValueChange={(v) => {
-                    setFrequency("yearly");
+                    setSummaryOverrideFreq("yearly");
                     setSummaryOverride(v);
                   }}
                   placeholder={formatNumberPlain(summaryYearly || 360000)}

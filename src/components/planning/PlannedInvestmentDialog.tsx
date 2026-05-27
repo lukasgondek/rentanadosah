@@ -30,20 +30,21 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
   const [open, setOpen] = useState(!!editData);
   const { toast } = useToast();
 
-  // Nový dialog se otevře jako kompletní spočítaný příklad (5M Kč investice).
-  // Uživatel hodnoty přepíše svými, nebo si jen prohlédne, jak by to vyšlo.
+  // Nový dialog má VŠECHNA pole prázdná — defaultní hodnoty jen jako
+  // placeholder atribut (šedě). Tak klient hned vidí, co je doporučení
+  // a co už sám přepsal (černý text). Edit režim načte uložené hodnoty.
   const [formData, setFormData] = useState({
-    property_identifier: editData?.property_identifier || "Praha 2, Vinohrady",
-    purchase_price: editData?.purchase_price?.toString() || "5000000",
-    estimated_value: editData?.estimated_value?.toString() || "5200000",
-    monthly_rent: editData?.monthly_rent?.toString() || "25000",
-    monthly_expenses: editData?.monthly_expenses?.toString() || "5000",
-    appreciation_percent: editData?.appreciation_percent?.toString() || "5",
-    rent_growth_percent: editData?.rent_growth_percent?.toString() || "5",
-    loan_amount: editData?.loan_amount?.toString() || "4000000",
-    interest_rate: editData?.interest_rate?.toString() || "4.5",
-    ltv_percent: editData?.ltv_percent?.toString() || "80",
-    term_months: editData ? Math.round(editData.term_months / 12).toString() : "25",
+    property_identifier: editData?.property_identifier || "",
+    purchase_price: editData?.purchase_price?.toString() || "",
+    estimated_value: editData?.estimated_value?.toString() || "",
+    monthly_rent: editData?.monthly_rent?.toString() || "",
+    monthly_expenses: editData?.monthly_expenses?.toString() || "",
+    appreciation_percent: editData?.appreciation_percent?.toString() || "",
+    rent_growth_percent: editData?.rent_growth_percent?.toString() || "",
+    loan_amount: editData?.loan_amount?.toString() || "",
+    interest_rate: editData?.interest_rate?.toString() || "",
+    ltv_percent: editData?.ltv_percent?.toString() || "",
+    term_months: editData ? Math.round(editData.term_months / 12).toString() : "",
     step_year: editData?.step_year?.toString() || "0",
     plan_name: editData?.plan_name || "",
     reno_property_id: editData?.reno_property_id || "",
