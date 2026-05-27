@@ -270,28 +270,29 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     const interestRate = financeExpanded ? (parseFloat(formData.interest_rate) || 0) : 0;
     const termYears = financeExpanded ? (parseFloat(formData.term_months) || 0) : 0;
 
-    // B1+B2: dostupná zástava + auto placeholder výše úvěru
-    // Logika: kupovaná nemovitost (celá odhad) + vybrané stávající zástavy.
-    // Pro stávající: pokud je v refinancedLoanIds (refi splatí starou jistinu)
-    // → bere se CELÁ odhadní cena; jinak jen VOLNÁ zástava (po starých úvěrech).
+    // B1+B2: dostupná zástava + auto placeholder výše úvěru (per CEO 2026-05-27)
+    // Vzorec:
+    //  base   = LTV × KUPNÍ CENA kupované nemovitosti (ne odhad! — banka
+    //           půjčí proti kupní ceně, ne odhadu nahoře)
+    //  + LTV × VOLNÁ zástava každé vybrané stávající nemovitosti (collateralPropIds)
+    //  + IF stávající nemovitost má všechny úvěry v refi → místo volné použij
+    //    CELOU odhadní cenu (refi splatí staré jistiny, banka má celou kapacitu)
+    //
+    // Pozor: refi sám o sobě nestačí — nemovitost MUSÍ být vybraná v zástavách.
+    // Refi je jen modifikátor "co se počítá" (volná vs. celá odhad).
     const refinancedLoanIdSet = new Set(refinancedLoanIds);
-    const availableCollateralValue =
-      (buyExpanded ? estimatedValue : 0) +
-      collateralPropIds.reduce((sum, pid) => {
-        const p = availableProperties.find((x) => x.id === pid);
-        if (!p) return sum;
-        const isRefiingAnyLoanOnIt = (p.boundLoans || []).some((l: any) =>
-          refinancedLoanIdSet.has(l.id)
-        );
-        // Pokud nemovitost má vázané úvěry a všechny jsou refinancované →
-        // celá odhad. Pokud má úvěry ale jen některé refi → bezpečně zástava
-        // jen volnou částí (zbylé úvěry banka pořád vidí).
-        if (isRefiingAnyLoanOnIt) {
-          const allRefi = (p.boundLoans || []).every((l: any) => refinancedLoanIdSet.has(l.id));
-          return sum + (allRefi ? projValue(p) : projFreeCollateral(p));
-        }
-        return sum + projFreeCollateral(p);
-      }, 0);
+    const buyCollateralBasis = buyExpanded ? purchasePrice : 0;
+    const collateralFromExisting = collateralPropIds.reduce((sum, pid) => {
+      const p = availableProperties.find((x) => x.id === pid);
+      if (!p) return sum;
+      const loansOnProp = p.boundLoans || [];
+      // Bez úvěrů → klient vlastní 100 %, celá odhad je k dispozici.
+      if (loansOnProp.length === 0) return sum + projValue(p);
+      // Všechny úvěry refi → celá odhad (staré jistiny se splatí).
+      const allRefi = loansOnProp.every((l: any) => refinancedLoanIdSet.has(l.id));
+      return sum + (allRefi ? projValue(p) : projFreeCollateral(p));
+    }, 0);
+    const availableCollateralValue = buyCollateralBasis + collateralFromExisting;
 
     const loanAmountPlaceholder = availableCollateralValue * ltvDecimal;
     // Pokud klient nezadal výši úvěru, používáme navrženou (= max do LTV).
