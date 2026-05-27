@@ -153,6 +153,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     available_collateral_value: 0,
     required_collateral: 0,
     collateral_balance: 0, // + = přebytek, − = chybí
+    loan_ltv_ratio: 0, // úvěr / zástavní hodnota (bez %)
     // B3: účelová / max neúčelová část
     purpose_amount: 0,
     max_non_purpose: 0,
@@ -341,8 +342,19 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
     const collateralFromExisting = Array.from(contributionByProp.values()).reduce((s, v) => s + v, 0);
     const availableCollateralValue = buyCollateralBasis + collateralFromExisting;
 
-    const loanAmountPlaceholder = availableCollateralValue * ltvDecimal;
-    // Pokud klient nezadal výši úvěru, používáme navrženou (= max do LTV).
+    // Placeholder výše úvěru (per CEO 2026-05-27 revize 3):
+    // Výše úvěru = ÚČELOVÁ ČÁST = co klient skutečně potřebuje vyčerpat:
+    //   kupní cena + zbývající jistina refi (splatí se) + plánovaná rekonstrukce.
+    // Tohle je odlišné od Maximum z LTV (= kolik banka maximálně dá).
+    // purposeAmount se vypočítá níže, používáme ho i tady.
+    const renoInvestForPurpose = renoExpanded ? (parseFloat(formData.reno_investment) || 0) : 0;
+    const refinancedPayoffForPurpose = availableLoans
+      .filter((l) => refinancedLoanIds.includes(l.id))
+      .reduce((sum, l) => sum + projRemaining(l), 0);
+    const loanAmountPlaceholder =
+      (buyExpanded ? purchasePrice : 0) + refinancedPayoffForPurpose + renoInvestForPurpose;
+
+    // Pokud klient nezadal výši úvěru, používáme navrženou (= účelová částka).
     const loanAmountInput = parseFloat(formData.loan_amount);
     const loanAmount = financeExpanded
       ? (isNaN(loanAmountInput) || loanAmountInput === 0
@@ -350,9 +362,13 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
           : loanAmountInput)
       : 0;
 
-    // B1: požadovaná zástava pro daný úvěr
+    // B1: požadovaná zástava pro daný úvěr (= úvěr / LTV)
     const requiredCollateral = ltvDecimal > 0 ? loanAmount / ltvDecimal : 0;
     const collateralBalance = availableCollateralValue - requiredCollateral;
+
+    // Poměr LTV (per CEO): jak velkou část zástavní hodnoty úvěr pokrývá.
+    // = úvěr / zástavní hodnota celkem. Bez % značky (CEO: "procenta neuváděj").
+    const loanLtvRatio = availableCollateralValue > 0 ? loanAmount / availableCollateralValue : 0;
 
     // Cashflow
     const cashflow = monthlyRent - monthlyExpenses;
@@ -539,6 +555,7 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
       available_collateral_value: availableCollateralValue,
       required_collateral: requiredCollateral,
       collateral_balance: collateralBalance,
+      loan_ltv_ratio: loanLtvRatio,
       purpose_amount: purposeAmount,
       max_non_purpose: maxNonPurpose,
       current_cashflow_impact_pre_drawdown: currentCashflowImpactPreDrawdown,
@@ -845,21 +862,10 @@ export const PlannedInvestmentDialog = ({ onSuccess, editData, userId, onClose }
                   }
                   required
                 />
-                {calculations.loan_amount_placeholder > 0 && (
+                {/* Poměr LTV (per CEO: bez % značky) — jen když je co počítat */}
+                {calculations.loan_ltv_ratio > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    Maximum z LTV {formData.ltv_percent || "80"} %:{" "}
-                    <button
-                      type="button"
-                      className="text-blue-600 hover:underline"
-                      onClick={() =>
-                        setFormData({
-                          ...formData,
-                          loan_amount: Math.round(calculations.loan_amount_placeholder).toString(),
-                        })
-                      }
-                    >
-                      {formatNumber(Math.round(calculations.loan_amount_placeholder))} Kč
-                    </button>
+                    Poměr LTV: <span className="font-semibold">{calculations.loan_ltv_ratio.toFixed(2)}</span>
                   </p>
                 )}
               </div>
