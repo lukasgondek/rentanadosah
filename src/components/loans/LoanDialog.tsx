@@ -71,6 +71,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
     monthly_payment: editData?.monthly_payment?.toString() || "",
     ltv_percent: editData?.ltv_percent?.toString() || "",
     bank_name: editData?.bank_name || "",
+    rate_anniversary_date: editData?.rate_anniversary_date || "",
   });
 
   // Fetch collateral options (properties + cadastrally separated units)
@@ -317,6 +318,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
       ltv_percent: ltvValue,
       collateral_location: collateralLabels || null,
       bank_name: formData.bank_name || null,
+      rate_anniversary_date: formData.rate_anniversary_date || null,
       is_forecast: false,
     };
 
@@ -431,7 +433,7 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
     setFormData({
       name: "", original_amount: "", remaining_principal: "",
       interest_rate: "", term_months: "", monthly_payment: "",
-      ltv_percent: "", bank_name: "",
+      ltv_percent: "", bank_name: "", rate_anniversary_date: "",
     });
     setCollaterals([]);
     setOpen(false);
@@ -536,11 +538,24 @@ export const LoanDialog = ({ onSuccess, editData, userId }: LoanDialogProps) => 
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Banka</Label>
-            <Input value={formData.bank_name}
-              onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-              placeholder="Např. Česká spořitelna" />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Banka</Label>
+              <Input value={formData.bank_name}
+                onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                placeholder="Např. Česká spořitelna" />
+            </div>
+            <div className="space-y-2">
+              <Label>
+                Výročí úrokové sazby
+                <span className="text-muted-foreground font-normal"> — nepovinné</span>
+              </Label>
+              <Input
+                type="date"
+                value={formData.rate_anniversary_date}
+                onChange={(e) => setFormData({ ...formData, rate_anniversary_date: e.target.value })}
+              />
+            </div>
           </div>
 
           {/* Collaterals section */}
