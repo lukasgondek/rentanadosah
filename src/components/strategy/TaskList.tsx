@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, CheckSquare, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface ClientTask {
   id: string;
@@ -36,11 +37,32 @@ export default function TaskList({ userId: viewUserId, isAdmin = false }: Props)
   const [showCompleted, setShowCompleted] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  // null = nový úkol (dialog volaný "Přidat"); objekt = edituje existující.
+  // Edit smí jenom admin/konzultant — klient text/přiřazení nemění.
+  const [editingTask, setEditingTask] = useState<ClientTask | null>(null);
+  const [deletingTask, setDeletingTask] = useState<ClientTask | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newAssignedTo, setNewAssignedTo] = useState("klient");
   const [newDeadline, setNewDeadline] = useState("");
   const { toast } = useToast();
+
+  const isEditDialogOpen = dialogOpen || !!editingTask;
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingTask(null);
+    setNewTitle("");
+    setNewDescription("");
+    setNewAssignedTo("klient");
+    setNewDeadline("");
+  };
+  const openEditDialog = (task: ClientTask) => {
+    setEditingTask(task);
+    setNewTitle(task.title);
+    setNewDescription(task.description || "");
+    setNewAssignedTo(task.assigned_to);
+    setNewDeadline(task.deadline || "");
+  };
 
   const fetchTasks = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -93,27 +115,39 @@ export default function TaskList({ userId: viewUserId, isAdmin = false }: Props)
     if (!user) return;
 
     const targetUserId = viewUserId || user.id;
-
-    const { error } = await supabase.from("client_tasks").insert({
-      client_id: targetUserId,
-      created_by: user.id,
+    const payload = {
       title: newTitle.trim(),
       description: newDescription.trim() || null,
       assigned_to: newAssignedTo,
       deadline: newDeadline || null,
-    });
+    };
+
+    const { error } = editingTask
+      ? await supabase.from("client_tasks").update(payload).eq("id", editingTask.id)
+      : await supabase.from("client_tasks").insert({
+          client_id: targetUserId,
+          created_by: user.id,
+          ...payload,
+        });
 
     if (error) {
       toast({ title: "Chyba", description: error.message, variant: "destructive" });
       return;
     }
 
-    toast({ title: "Úspěch", description: "Úkol byl přidán" });
-    setDialogOpen(false);
-    setNewTitle("");
-    setNewDescription("");
-    setNewAssignedTo("klient");
-    setNewDeadline("");
+    toast({ title: "Úspěch", description: editingTask ? "Úkol byl upraven" : "Úkol byl přidán" });
+    closeDialog();
+    fetchTasks();
+  };
+
+  const handleDelete = async (task: ClientTask) => {
+    const { error } = await supabase.from("client_tasks").delete().eq("id", task.id);
+    if (error) {
+      toast({ title: "Chyba", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Úkol smazán" });
+    setDeletingTask(null);
     fetchTasks();
   };
 
@@ -144,66 +178,66 @@ export default function TaskList({ userId: viewUserId, isAdmin = false }: Props)
             </SelectContent>
           </Select>
           {isAdmin && (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Přidat úkol
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Nový úkol</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Název úkolu</Label>
-                    <Input
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="Co je potřeba udělat..."
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Popis (nepovinné)</Label>
-                    <Textarea
-                      value={newDescription}
-                      onChange={(e) => setNewDescription(e.target.value)}
-                      placeholder="Podrobnosti..."
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+            <>
+              <Button size="sm" onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Přidat úkol
+              </Button>
+              <Dialog open={isEditDialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); }}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingTask ? "Upravit úkol" : "Nový úkol"}</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Úkol je pro</Label>
-                      <Select value={newAssignedTo} onValueChange={setNewAssignedTo}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="klient">Klienta</SelectItem>
-                          <SelectItem value="rr">Realitní Rentiér</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Deadline (nepovinné)</Label>
+                      <Label>Název úkolu</Label>
                       <Input
-                        type="date"
-                        value={newDeadline}
-                        onChange={(e) => setNewDeadline(e.target.value)}
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        placeholder="Co je potřeba udělat..."
+                        required
                       />
                     </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                      Zrušit
-                    </Button>
-                    <Button type="submit">Přidat</Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <div className="space-y-2">
+                      <Label>Popis (nepovinné)</Label>
+                      <Textarea
+                        value={newDescription}
+                        onChange={(e) => setNewDescription(e.target.value)}
+                        placeholder="Podrobnosti..."
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Úkol je pro</Label>
+                        <Select value={newAssignedTo} onValueChange={setNewAssignedTo}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="klient">Klienta</SelectItem>
+                            <SelectItem value="rr">Realitní Rentiér</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Deadline (nepovinné)</Label>
+                        <Input
+                          type="date"
+                          value={newDeadline}
+                          onChange={(e) => setNewDeadline(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={closeDialog}>
+                        Zrušit
+                      </Button>
+                      <Button type="submit">{editingTask ? "Uložit změny" : "Přidat"}</Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
         </div>
       </div>
@@ -241,11 +275,53 @@ export default function TaskList({ userId: viewUserId, isAdmin = false }: Props)
                     <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
                   )}
                 </div>
+                {isAdmin && (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => openEditDialog(task)}
+                      title="Upravit úkol"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => setDeletingTask(task)}
+                      title="Smazat úkol"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!deletingTask} onOpenChange={(o) => { if (!o) setDeletingTask(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Smazat úkol?</AlertDialogTitle>
+            <AlertDialogDescription>
+              „{deletingTask?.title}" — tato akce nelze vrátit zpět.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Zrušit</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingTask && handleDelete(deletingTask)}
+            >
+              Smazat
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Completed tasks toggle */}
       {filteredCompleted.length > 0 && (
