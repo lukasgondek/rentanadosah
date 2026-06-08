@@ -80,10 +80,21 @@ export default {
             height: "0",
           },
         },
+        "pulse-gold": {
+          "0%, 100%": {
+            opacity: "1",
+            boxShadow: "0 0 0 0 hsl(var(--accent) / 0.45)",
+          },
+          "50%": {
+            opacity: "0.92",
+            boxShadow: "0 0 0 8px hsl(var(--accent) / 0)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-gold": "pulse-gold 2s ease-in-out infinite",
       },
     },
   },

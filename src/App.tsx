@@ -8,6 +8,8 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
+import Rezervace from "./pages/Rezervace";
+import StrategickaKonzultace from "./pages/StrategickaKonzultace";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +24,8 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/terms" element={<Terms />} />
+          <Route path="/rezervace" element={<Rezervace />} />
+          <Route path="/strategicka-konzultace" element={<StrategickaKonzultace />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

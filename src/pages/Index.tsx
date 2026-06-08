@@ -10,7 +10,8 @@ import LoansTab from "@/components/loans/LoansTab";
 import PropertiesTab from "@/components/properties/PropertiesTab";
 import PlanningTab from "@/components/planning/PlanningTab";
 import StrategyTab from "@/components/strategy/StrategyTab";
-import StrategyProspectLP from "@/components/strategy/StrategyProspectLP";
+import StrategyVSL from "@/components/strategy/StrategyVSL";
+import { FUNNEL } from "@/lib/funnelConfig";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Loader2, User as UserIcon, X } from "lucide-react";
@@ -139,12 +140,12 @@ const Index = () => {
         return <PropertiesTab userId={viewUserId} isAdmin={isAdmin} />;
       case "strategy":
         if (isProspect) {
-          return <StrategyProspectLP section="strategy" />;
+          return <StrategyVSL where="strategy" videoUrl={FUNNEL.vsl.strategy || undefined} />;
         }
         return <StrategyTab userId={viewUserId} isAdmin={isAdmin} />;
       case "planning":
         if (isProspect) {
-          return <StrategyProspectLP section="planning" />;
+          return <StrategyVSL where="planning" videoUrl={FUNNEL.vsl.planning || undefined} />;
         }
         return <PlanningTab userId={viewUserId} isAdmin={isAdmin} />;
       case "emails":

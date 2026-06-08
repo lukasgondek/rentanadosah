@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { cn } from "@/lib/utils";
+import StrategyCTA from "@/components/strategy/StrategyCTA";
 
 interface LayoutProps {
   children: ReactNode;
@@ -106,6 +107,13 @@ const Layout = ({ children, activeTab, onTabChange, isAdmin = false, isProspect 
               </button>
             );
           })}
+          {isProspect && (
+            <StrategyCTA
+              variant="nav"
+              where="nav_mobile"
+              className="w-full justify-center"
+            />
+          )}
           <Button variant="outline" onClick={handleLogout} className="w-full">
             <LogOut className="mr-2 h-4 w-4" />
             Odhlásit se
@@ -135,6 +143,9 @@ const Layout = ({ children, activeTab, onTabChange, isAdmin = false, isProspect 
                 </button>
               );
             })}
+            {isProspect && (
+              <StrategyCTA variant="nav" where="nav_desktop" className="ml-auto" />
+            )}
           </nav>
         </div>
       </div>

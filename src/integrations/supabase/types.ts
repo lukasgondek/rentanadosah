@@ -333,27 +333,71 @@ export type Database = {
       }
       profiles: {
         Row: {
+          arr_call_booked_at: string | null
+          consultation_purchased_at: string | null
           created_at: string | null
           email: string
           full_name: string | null
           id: string
+          qualification_checked_at: string | null
+          qualification_status: string | null
           updated_at: string | null
+          vsl_watched_percent: number
         }
         Insert: {
+          arr_call_booked_at?: string | null
+          consultation_purchased_at?: string | null
           created_at?: string | null
           email: string
           full_name?: string | null
           id: string
+          qualification_checked_at?: string | null
+          qualification_status?: string | null
           updated_at?: string | null
+          vsl_watched_percent?: number
         }
         Update: {
+          arr_call_booked_at?: string | null
+          consultation_purchased_at?: string | null
           created_at?: string | null
           email?: string
           full_name?: string | null
           id?: string
+          qualification_checked_at?: string | null
+          qualification_status?: string | null
           updated_at?: string | null
+          vsl_watched_percent?: number
         }
         Relationships: []
+      }
+      qualification_log: {
+        Row: {
+          checked_at: string
+          id: string
+          result: Json
+          user_id: string
+        }
+        Insert: {
+          checked_at?: string
+          id?: string
+          result: Json
+          user_id: string
+        }
+        Update: {
+          checked_at?: string
+          id?: string
+          result?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qualification_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       property_units: {
         Row: {
