@@ -14,6 +14,17 @@ import { ArrowRight, Loader2, CalendarCheck, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { checkQualification, type QualificationResult } from "@/lib/qualificationGate";
 import { funnelEvents } from "@/lib/tracking";
+import { FUNNEL } from "@/lib/funnelConfig";
+
+/** Připoj UTM/fbclid z aktuální URL na cílovou (atribuce přežije skok na hlavní web). */
+function withTracking(base: string): string {
+  const p = new URLSearchParams(window.location.search);
+  const out = new URLSearchParams();
+  ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"]
+    .forEach((k) => { const v = p.get(k); if (v) out.set(k, v); });
+  const q = out.toString();
+  return q ? `${base}?${q}` : base;
+}
 
 interface StrategyCTAProps {
   /** "button" = plné CTA pod videem/v tabu; "nav" = kompaktní pulzující pilulka do navigace. */
@@ -58,16 +69,16 @@ export default function StrategyCTA({
           setIncomplete(result.missing);
           break;
         case "arr_qualified":
-          navigate("/rezervace");
+          // Výsledkové stránky jsou na hlavním webu (jednotná data/pixel/GA4).
+          window.location.href = withTracking(FUNNEL.resultPages.rezervace);
           break;
         case "consultation_only":
-          navigate("/strategicka-konzultace");
+          window.location.href = withTracking(FUNNEL.resultPages.konzultace);
           break;
       }
     } catch {
-      // Při chybě brány nech uživatele radši na konzultační stránku,
-      // ať se funnel nezasekne (konzervativní fallback).
-      navigate("/strategicka-konzultace");
+      // Při chybě brány pošli na konzultační stránku, ať se funnel nezasekne.
+      window.location.href = withTracking(FUNNEL.resultPages.konzultace);
     } finally {
       setLoading(false);
     }

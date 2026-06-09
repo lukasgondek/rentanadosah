@@ -1,27 +1,15 @@
 /**
- * Centrální konfigurace funnelu — všechno, co se "doplní později",
- * je tady na jednom místě. Měň hodnoty tady, ne v komponentách.
+ * Centrální konfigurace funnelu (kalkulačková část).
+ *
+ * Výsledkové stránky (rezervace + prodejka konzultace) i ThriveCart/kalendář
+ * jsou na hlavním webu realitnirentier.cz (WBV) — viz webbyvoice/scripts/pages.
+ * Tady zůstává jen to, co potřebuje samotná kalkulačka.
  */
 export const FUNNEL = {
-  /** Google Calendar rezervační stránka (call zdarma pro kvalifikované). */
-  calendarUrl: "https://calendar.app.google/opeUKRzkAPLNFKdo6",
-
-  /** Název produktu — používá se v UI i v komunikaci. */
-  consultationProductName: "Strategie realitního rentiéra",
-
-  /** Cena (Kč, vč. DPH). */
-  consultationPrice: 14990,
-
-  /**
-   * ThriveCart embed produktu "Strategie realitního rentiéra" (product 37,
-   * účet doskvelosti). Embed se renderuje skriptem thrivecart.js, který
-   * najde div podle `embeddableId`.
-   */
-  thrivecart: {
-    account: "doskvelosti",
-    product: "37",
-    embeddableId: "tc-doskvelosti-37-H737E5",
-    scriptSrc: "//tinder.thrivecart.com/embed/v1/thrivecart.js",
+  /** Cílové stránky brány — na hlavním webu (jednotná data: pixel 5048 + GA4). */
+  resultPages: {
+    rezervace: "https://realitnirentier.cz/rezervace",
+    konzultace: "https://realitnirentier.cz/strategicka-konzultace",
   },
 
   /**
