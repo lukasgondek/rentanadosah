@@ -1,14 +1,13 @@
 import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { CheckCircle2, ShieldCheck, ArrowRight } from "lucide-react";
+import { CheckCircle2, ShieldCheck } from "lucide-react";
 import FunnelPageShell from "@/components/strategy/FunnelPageShell";
 import { FUNNEL } from "@/lib/funnelConfig";
 import { funnelEvents } from "@/lib/tracking";
 
 /**
- * Prodejní stránka strategické konzultace (14 990 Kč) pro uživatele,
- * kteří nesplňují kritéria Akcelerátoru.
+ * Prodejní stránka produktu "Strategie realitního rentiéra" (14 990 Kč)
+ * pro uživatele, kteří nesplňují kritéria Akcelerátoru.
  *
  * TEXT je placeholder — CEO ho naplní zvlášť (viz
  * handoffs/SALES-PAGE-strategicka-konzultace-draft-2026-05-27.md).
@@ -19,6 +18,17 @@ export default function StrategickaKonzultace() {
     funnelEvents.consultationOffered();
   }, []);
 
+  // ThriveCart embed: vlož skript jednou; thrivecart.js si najde div podle id.
+  useEffect(() => {
+    const id = FUNNEL.thrivecart.embeddableId;
+    if (document.getElementById(id)) return;
+    const s = document.createElement("script");
+    s.async = true;
+    s.src = FUNNEL.thrivecart.scriptSrc;
+    s.id = id;
+    document.body.appendChild(s);
+  }, []);
+
   const priceFormatted = new Intl.NumberFormat("cs-CZ").format(FUNNEL.consultationPrice);
 
   return (
@@ -27,7 +37,7 @@ export default function StrategickaKonzultace() {
         {/* HERO — placeholder text */}
         <section className="text-center space-y-4">
           <p className="text-sm font-semibold text-accent uppercase tracking-wider">
-            Strategická konzultace
+            {FUNNEL.consultationProductName}
           </p>
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight">
             {/* TODO: nadpis ze sales page draftu */}
@@ -58,36 +68,25 @@ export default function StrategickaKonzultace() {
           </div>
         </section>
 
-        {/* CENA + CHECKOUT */}
+        {/* CENA + CHECKOUT (ThriveCart product 37) */}
         <section>
-          <Card className="p-8 text-center space-y-6 border-accent/40">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground uppercase tracking-wide">Cena</p>
+          <Card className="p-8 space-y-6 border-accent/40">
+            <div className="text-center space-y-1">
+              <p className="text-sm text-muted-foreground uppercase tracking-wide">
+                {FUNNEL.consultationProductName}
+              </p>
               <p className="text-4xl font-bold">{priceFormatted} Kč</p>
               <p className="text-sm text-muted-foreground">vč. DPH</p>
             </div>
 
-            {FUNNEL.consultationCheckoutUrl ? (
-              <div className="rounded-lg overflow-hidden border">
-                <iframe
-                  src={FUNNEL.consultationCheckoutUrl}
-                  title="Objednávka konzultace"
-                  className="w-full"
-                  style={{ height: 600, border: 0 }}
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <Button size="lg" className="text-base px-8" disabled>
-                  Objednat konzultaci
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  {/* Platební brána se připojí, jakmile bude produkt vytvořený */}
-                  Platební brána se připravuje.
-                </p>
-              </div>
-            )}
+            {/* ThriveCart embeddable — checkout se vyrenderuje sem */}
+            <div
+              data-thrivecart-account={FUNNEL.thrivecart.account}
+              data-thrivecart-tpl="v2"
+              data-thrivecart-product={FUNNEL.thrivecart.product}
+              className="thrivecart-embeddable"
+              data-thrivecart-embeddable={FUNNEL.thrivecart.embeddableId}
+            />
 
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <ShieldCheck className="h-4 w-4 text-green-600" />

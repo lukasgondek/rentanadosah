@@ -6,14 +6,23 @@ export const FUNNEL = {
   /** Google Calendar rezervační stránka (call zdarma pro kvalifikované). */
   calendarUrl: "https://calendar.app.google/opeUKRzkAPLNFKdo6",
 
-  /** Cena strategické konzultace (Kč, vč. DPH). */
+  /** Název produktu — používá se v UI i v komunikaci. */
+  consultationProductName: "Strategie realitního rentiéra",
+
+  /** Cena (Kč, vč. DPH). */
   consultationPrice: 14990,
 
   /**
-   * ThriveCart / Stripe embed URL pro konzultaci. Prázdné = zatím se ukáže
-   * placeholder místo checkoutu. Doplň, až bude produkt vytvořený.
+   * ThriveCart embed produktu "Strategie realitního rentiéra" (product 37,
+   * účet doskvelosti). Embed se renderuje skriptem thrivecart.js, který
+   * najde div podle `embeddableId`.
    */
-  consultationCheckoutUrl: "",
+  thrivecart: {
+    account: "doskvelosti",
+    product: "37",
+    embeddableId: "tc-doskvelosti-37-H737E5",
+    scriptSrc: "//tinder.thrivecart.com/embed/v1/thrivecart.js",
+  },
 
   /**
    * VSL embed URL (YouTube/Vimeo) pro jednotlivá umístění. Prázdné = placeholder
