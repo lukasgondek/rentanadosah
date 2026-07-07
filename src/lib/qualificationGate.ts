@@ -6,8 +6,8 @@ import type { Json } from "@/integrations/supabase/types";
  *
  * Tok: user vyplní kalkulačku → klikne CTA → checkQualification rozhodne:
  *   - incomplete        → nemá dost dat, ukáže se výzva k doplnění
- *   - arr_qualified     → splňuje kritéria Akcelerátoru → kalendář (call zdarma)
- *   - consultation_only → nesplňuje → prodejní stránka konzultace 14 990 Kč
+ *   - arr_qualified     → splňuje kritéria Akcelerátoru → kalendář (rezervace konzultace)
+ *   - consultation_only → nesplňuje → prodejní stránka konzultace 19 000 Kč
  *
  * Pozn.: Příjem se posuzuje z REÁLNÉ čisté hotovosti, NE z daňového základu.
  * Logika realNetMonthly je 1:1 převzatá z IncomeExpensesTab.tsx (jediný zdroj pravdy).

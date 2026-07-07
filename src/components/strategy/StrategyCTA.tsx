@@ -116,11 +116,11 @@ export default function StrategyCTA({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-accent" />
-              Ještě nám pár věcí chybí
+              Ještě pár věcí chybí
             </DialogTitle>
             <DialogDescription>
-              Abychom vám mohli připravit smysluplnou strategii, potřebujeme v kalkulačce
-              vyplnit vaši situaci. Chybí nám:
+              Abych vám mohl připravit smysluplnou strategii, potřebuji v kalkulačce
+              vidět vaši situaci. Chybí:
             </DialogDescription>
           </DialogHeader>
           <ul className="space-y-2 py-2">
